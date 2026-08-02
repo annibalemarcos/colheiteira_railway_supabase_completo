@@ -1,0 +1,31 @@
+# Dependências do Projeto Colheiteira
+
+# Web scraping e requests
+requests>=2.31.0,<3
+beautifulsoup4>=4.12.0,<5
+lxml>=4.9.0,<7
+
+# Análise ortográfica
+language-tool-python>=2.7.1,<3
+
+# Processamento de imagens
+Pillow>=10.0.0,<13
+
+# Framework web / produção
+Flask>=3.0.0,<4
+gunicorn>=22.0.0,<24
+
+# Persistência Supabase/PostgreSQL
+SQLAlchemy>=2.0.30,<3
+psycopg[binary]>=3.2.0,<4
+
+# Análise de conteúdo
+textstat>=0.7.3,<1
+
+# Utilitários
+python-dateutil>=2.8.2,<3
+
+# Desenvolvimento e testes
+pytest>=7.4.0,<9
+black>=23.0.0,<27
+flake8>=6.0.0,<8

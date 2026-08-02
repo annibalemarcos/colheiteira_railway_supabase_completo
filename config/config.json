@@ -1,0 +1,75 @@
+{
+  "ortografia": {
+    "enabled": true,
+    "language": "pt-BR",
+    "max_errors": 50,
+    "ignore_words": [
+      "SEO",
+      "API",
+      "URL",
+      "HTML",
+      "CSS"
+    ],
+    "weight": 1.5
+  },
+  "links": {
+    "enabled": true,
+    "max_links_check": 100,
+    "timeout": 5,
+    "follow_redirects": true,
+    "slow_threshold_seconds": 3,
+    "weight": 1.8
+  },
+  "imagens": {
+    "enabled": true,
+    "max_images_check": 50,
+    "min_resolution": {
+      "width": 800,
+      "height": 600
+    },
+    "max_size_kb": 500,
+    "required_formats": ["webp", "jpg", "png"],
+    "check_alt_text": true,
+    "weight": 1.6
+  },
+  "social_media": {
+    "enabled": true,
+    "platforms": [
+      "facebook",
+      "instagram",
+      "twitter",
+      "linkedin",
+      "youtube",
+      "tiktok"
+    ],
+    "check_profile_image": true,
+    "check_recent_activity": true,
+    "weight": 1.4
+  },
+  "lighthouse": {
+    "enabled": true,
+    "categories": [
+      "performance",
+      "accessibility",
+      "best-practices",
+      "seo"
+    ],
+    "device": "mobile",
+    "throttling": true,
+    "weight": 1.5
+  },
+  "seo": {
+    "enabled": true,
+    "check_meta_tags": true,
+    "check_headings": true,
+    "check_sitemap": true,
+    "check_robots": true,
+    "weight": 1.0
+  },
+  "global": {
+    "timeout": 30,
+    "user_agent": "Colheiteira/1.0 (Web Analysis Bot)",
+    "max_concurrent": 10,
+    "retry_attempts": 3
+  }
+}

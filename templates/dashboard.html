@@ -1,0 +1,1267 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Colheiteira Dashboard</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --bg: #f3f7f2;
+      --ink: #18251c;
+      --muted: #657266;
+      --card: rgba(255,255,255,.92);
+      --line: rgba(21, 45, 28, .11);
+      --green: #16824b;
+      --green-2: #25a064;
+      --green-soft: #e2f7eb;
+      --amber: #b7791f;
+      --red: #c53030;
+      --blue: #2f6fed;
+      --dark: #101814;
+      --sidebar: rgba(13, 30, 20, .94);
+      --shadow: 0 18px 60px rgba(20, 40, 24, .12);
+    }
+    * { box-sizing: border-box; }
+    body {
+      min-height: 100vh;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top left, rgba(36, 150, 91, .16), transparent 34rem),
+        radial-gradient(circle at top right, rgba(47, 111, 237, .11), transparent 30rem),
+        var(--bg);
+    }
+    a { color: var(--green); }
+    html { scroll-behavior: smooth; }
+    .app-shell { display: grid; grid-template-columns: 290px minmax(0, 1fr); min-height: 100vh; }
+    .sidebar {
+      position: sticky; top: 0; height: 100vh; padding: 22px;
+      background: var(--sidebar); color: #f4fff8; overflow: auto;
+      box-shadow: 18px 0 50px rgba(20, 40, 24, .12);
+    }
+    .brand-mark { width: 48px; height: 48px; border-radius: 18px; display: grid; place-items: center; background: rgba(255,255,255,.12); color: #93f0bd; font-size: 1.45rem; }
+    .nav-pill {
+      display: flex; align-items: center; gap: 10px; width: 100%; border: 1px solid rgba(255,255,255,.08);
+      color: rgba(255,255,255,.82); text-decoration: none; border-radius: 16px; padding: 12px 14px;
+      background: rgba(255,255,255,.04); transition: .16s ease; margin-bottom: 9px;
+    }
+    .nav-pill:hover, .nav-pill.active { color: white; background: rgba(37,160,100,.24); transform: translateX(2px); }
+    .sidebar-footer { border-top: 1px solid rgba(255,255,255,.08); margin-top: 18px; padding-top: 18px; color: rgba(255,255,255,.62); font-size: .9rem; }
+    .content { padding: 26px; max-width: 1640px; width: 100%; }
+    .topbar { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 18px; }
+    .soft-card { background: var(--card); border: 1px solid var(--line); border-radius: 24px; box-shadow: 0 12px 32px rgba(20, 40, 24, .08); }
+    .hero {
+      border-radius: 28px; padding: 24px; background: linear-gradient(135deg, rgba(255,255,255,.96), rgba(232,246,237,.90));
+      box-shadow: var(--shadow); overflow: hidden; position: relative; border: 1px solid var(--line);
+    }
+    .hero::after { content: ""; position: absolute; right: -70px; top: -120px; width: 260px; height: 260px; border-radius: 999px; background: rgba(24,130,77,.13); }
+    .brand-icon { width: 52px; height: 52px; border-radius: 18px; display: grid; place-items: center; background: var(--green-soft); color: var(--green); font-size: 1.7rem; }
+    .tiny { font-size: .86rem; color: var(--muted); }
+    .micro { font-size: .78rem; color: var(--muted); }
+    .url-input, .bulk-input, .settings-input { border-radius: 16px; border: 1px solid var(--line); padding: 13px 15px; }
+    .bulk-input { min-height: 138px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .btn-harvest { min-height: 52px; border-radius: 16px; font-weight: 800; background: linear-gradient(135deg, var(--green), var(--green-2)); border: 0; color: white; box-shadow: 0 14px 26px rgba(24,130,77,.24); }
+    .btn-harvest:hover { color: white; filter: brightness(.96); transform: translateY(-1px); }
+    .btn-soft { border-radius: 15px; min-height: 42px; }
+    .bulk-switch-card { border: 1px solid rgba(24,130,77,.18); border-radius: 18px; background: rgba(226,247,235,.48); padding: 12px 14px; }
+    .form-check-input:checked { background-color: var(--green); border-color: var(--green); }
+    .stat-card { padding: 18px; min-height: 126px; position: relative; overflow: hidden; }
+    .stat-card::after { content: ""; position: absolute; width: 74px; height: 74px; border-radius: 999px; right: -18px; top: -20px; background: rgba(24,130,77,.08); }
+    .stat-label { color: var(--muted); font-size: .78rem; text-transform: uppercase; letter-spacing: .08em; font-weight: 800; }
+    .stat-value { font-size: 2.1rem; font-weight: 900; line-height: 1.05; }
+    .terminal { height: 340px; overflow: auto; background: var(--dark); color: #d7fbe6; border-radius: 20px; padding: 16px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .86rem; }
+    .log-line { padding: 3px 0; border-bottom: 1px solid rgba(255,255,255,.04); }
+    .log-time { color: #83a892; }
+    .log-success { color: #68d391; } .log-error { color: #fc8181; } .log-warning { color: #f6d365; } .log-info { color: #bee3f8; }
+    .plugin-card, .site-card { border-radius: 20px; border: 1px solid var(--line); background: white; padding: 18px; height: 100%; }
+    .score-pill { border-radius: 999px; padding: 7px 12px; font-weight: 850; font-size: .86rem; white-space: nowrap; }
+    .score-good { background: #dff6e9; color: #12633c; } .score-mid { background: #fff3cd; color: #805b10; } .score-bad { background: #ffe1e1; color: #9b1c1c; }
+    .history-item { border: 1px solid var(--line); border-radius: 18px; padding: 14px; background: rgba(255,255,255,.76); transition: .18s ease; }
+    .history-item:hover { transform: translateY(-1px); background: #fff; }
+    .details-box { max-height: 260px; overflow: auto; border: 1px dashed rgba(20,40,24,.16); background: #fbfdfb; border-radius: 16px; padding: 12px; }
+    .json-box { max-height: 520px; overflow: auto; background: var(--dark); color: #d7fbe6; border-radius: 20px; padding: 16px; font-size: .82rem; }
+    .chart-wrap { height: 310px; }
+    .empty { border: 1px dashed rgba(20,40,24,.22); border-radius: 20px; padding: 28px; color: var(--muted); background: rgba(255,255,255,.55); }
+    .progress { height: 14px; border-radius: 999px; background: rgba(24,130,77,.10); }
+    .progress-bar { background: linear-gradient(135deg, var(--green), var(--green-2)); }
+    .spinner-grow { width: .7rem; height: .7rem; }
+    .section-title { font-weight: 900; }
+    .kbd-ish { border-radius: 8px; background: rgba(255,255,255,.12); padding: 3px 7px; color: #d7fbe6; }
+    .offcanvas { border-radius: 24px 0 0 24px; }
+    .help-page { scroll-margin-top: 22px; }
+    .help-hero {
+      border-radius: 28px; padding: 24px; border: 1px solid var(--line);
+      background: linear-gradient(135deg, rgba(255,255,255,.97), rgba(237,247,242,.9));
+      box-shadow: var(--shadow);
+    }
+    .help-shot {
+      width: 100%; display: block; border-radius: 20px; border: 1px solid rgba(20,40,24,.14);
+      box-shadow: 0 18px 44px rgba(20,40,24,.14); background: #fff;
+    }
+    .guide-panel {
+      height: 100%; border-radius: 20px; border: 1px solid var(--line); background: rgba(255,255,255,.9);
+      padding: 18px;
+    }
+    .guide-icon {
+      width: 42px; height: 42px; border-radius: 14px; display: grid; place-items: center;
+      color: var(--green); background: var(--green-soft); font-size: 1.28rem; flex: 0 0 auto;
+    }
+    .guide-step {
+      display: grid; grid-template-columns: 42px minmax(0, 1fr); gap: 14px; align-items: start;
+      padding: 14px 0; border-bottom: 1px solid var(--line);
+    }
+    .guide-step:last-child { border-bottom: 0; padding-bottom: 0; }
+    .guide-number {
+      width: 42px; height: 42px; border-radius: 999px; display: grid; place-items: center;
+      background: #dff6e9; color: #12633c; font-weight: 900;
+    }
+    .example-box {
+      border-radius: 18px; background: var(--dark); color: #d7fbe6; padding: 16px; overflow: auto;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .86rem;
+    }
+    .guide-list { margin: 0; padding-left: 1.1rem; color: var(--muted); }
+    .guide-list li { margin-bottom: .45rem; }
+    .guide-tag {
+      display: inline-flex; align-items: center; gap: 6px; border-radius: 999px;
+      border: 1px solid rgba(24,130,77,.18); background: rgba(226,247,235,.52);
+      color: #12633c; padding: 6px 10px; font-size: .82rem; font-weight: 800;
+    }
+    .guide-table { width: 100%; border-collapse: separate; border-spacing: 0 8px; }
+    .guide-table th { color: var(--muted); font-size: .78rem; text-transform: uppercase; letter-spacing: .08em; }
+    .guide-table td, .guide-table th { padding: 10px 12px; vertical-align: top; }
+    .guide-table tbody tr { background: rgba(255,255,255,.84); box-shadow: inset 0 0 0 1px var(--line); }
+    .guide-table tbody td:first-child { border-radius: 14px 0 0 14px; font-weight: 800; color: var(--ink); }
+    .guide-table tbody td:last-child { border-radius: 0 14px 14px 0; color: var(--muted); }
+    .metric-guide {
+      display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px;
+    }
+    .metric-guide-item {
+      border-radius: 18px; border: 1px solid var(--line); padding: 14px; background: rgba(255,255,255,.88);
+    }
+    .metric-guide-value { font-size: 1.45rem; line-height: 1.05; font-weight: 900; }
+    .help-nav { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+    .help-nav a {
+      display: inline-flex; align-items: center; gap: 7px; border-radius: 999px; padding: 8px 12px;
+      color: #12633c; text-decoration: none; background: rgba(226,247,235,.7);
+      border: 1px solid rgba(24,130,77,.18); font-weight: 800; font-size: .86rem;
+    }
+    .help-nav a:hover { background: rgba(37,160,100,.16); color: #0c4b2d; }
+    .help-anchor { scroll-margin-top: 22px; }
+    .guide-kicker { color: var(--muted); font-size: .78rem; text-transform: uppercase; letter-spacing: .08em; font-weight: 900; }
+    .guide-callout {
+      border-left: 4px solid var(--green); padding: 12px 0 12px 14px; color: var(--muted);
+      background: linear-gradient(90deg, rgba(226,247,235,.58), transparent 74%);
+    }
+    .workflow {
+      display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px;
+    }
+    .workflow-item {
+      border-top: 4px solid rgba(24,130,77,.32); padding-top: 12px; min-height: 128px;
+    }
+    .workflow-item strong { display: block; margin-bottom: 6px; }
+    .priority-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+    .priority-item { border-left: 4px solid var(--green); padding: 8px 0 8px 12px; }
+    .priority-item.warning { border-left-color: var(--amber); }
+    .priority-item.danger { border-left-color: var(--red); }
+    .report-preview {
+      color: var(--ink);
+    }
+    .report-preview h4 { font-size: 1rem; font-weight: 900; margin-bottom: 10px; }
+    .report-line { display: flex; justify-content: space-between; gap: 14px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+    .report-line:last-child { border-bottom: 0; }
+    .report-line strong { text-align: right; overflow-wrap: anywhere; }
+    .glossary-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 20px; }
+    .glossary-grid dt { font-weight: 900; color: var(--ink); }
+    .glossary-grid dd { margin: 3px 0 0; color: var(--muted); font-size: .9rem; }
+    @media (max-width: 1100px) {
+      .app-shell { grid-template-columns: 1fr; }
+      .sidebar { position: relative; height: auto; border-radius: 0 0 24px 24px; }
+      .content { padding: 16px; }
+      .topbar { align-items: flex-start; }
+      .workflow { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 768px) {
+      .hero { padding: 18px; }
+      .help-hero { padding: 18px; }
+      .metric-guide { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .priority-grid, .glossary-grid { grid-template-columns: 1fr; }
+      .report-line { display: block; }
+      .report-line strong { display: block; text-align: left; margin-top: 3px; }
+      .stat-value { font-size: 1.65rem; }
+      .terminal { height: 260px; }
+    }
+    @media (max-width: 520px) {
+      .metric-guide { grid-template-columns: 1fr; }
+      .workflow { grid-template-columns: 1fr; }
+      .guide-table { min-width: 620px; }
+      .guide-table-wrap { overflow-x: auto; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="d-flex align-items-center gap-3 mb-4">
+        <div class="brand-mark"><i class="bi bi-flower1"></i></div>
+        <div>
+          <div class="h4 mb-0 fw-bold">Colheiteira</div>
+          <div class="small text-white-50">Auditoria web local</div>
+        </div>
+      </div>
+      <a href="#topo" class="nav-pill active"><i class="bi bi-speedometer2"></i> Dashboard</a>
+      <a href="#resultados" class="nav-pill"><i class="bi bi-plug"></i> Plugins</a>
+      <a href="#sitesBulk" class="nav-pill"><i class="bi bi-list-check"></i> Bulk / Sites</a>
+      <a href="#historico" class="nav-pill"><i class="bi bi-clock-history"></i> Histórico</a>
+      <a href="#json" class="nav-pill"><i class="bi bi-braces"></i> JSON bruto</a>
+      <button class="nav-pill border-0 text-start" type="button" data-bs-toggle="offcanvas" data-bs-target="#settingsCanvas"><i class="bi bi-sliders"></i> Configurações</button>
+      <a href="#ajuda" class="nav-pill"><i class="bi bi-question-circle"></i> Ajuda</a>
+      <a href="{{ url_for('logout') }}" class="nav-pill"><i class="bi bi-box-arrow-right"></i> Sair</a>
+      <div class="sidebar-footer">
+        <div class="mb-2"><i class="bi bi-person-circle me-1"></i> {{ current_user }}</div>
+        <div class="mb-2"><span class="kbd-ish">5840</span> porta do painel</div>
+        <div>Modo bulk usa pausas aleatórias entre análises para reduzir carga e evitar rajada de requisições.</div>
+      </div>
+    </aside>
+
+    <main class="content" id="topo">
+      <div class="topbar">
+        <div>
+          <div class="tiny text-uppercase fw-bold">Painel de controle</div>
+          <h1 class="h2 mb-0 fw-black">Colheita de sites</h1>
+        </div>
+        <div class="d-flex gap-2 flex-wrap justify-content-end">
+          <button class="btn btn-outline-secondary btn-soft" type="button" data-bs-toggle="offcanvas" data-bs-target="#settingsCanvas"><i class="bi bi-sliders"></i> Configurações</button>
+          <button id="refreshHistoryTopBtn" class="btn btn-outline-success btn-soft" type="button"><i class="bi bi-arrow-clockwise"></i> Atualizar</button>
+          <a class="btn btn-outline-dark btn-soft" href="{{ url_for('logout') }}"><i class="bi bi-box-arrow-right"></i> Sair</a>
+        </div>
+      </div>
+
+      <section class="hero mb-4">
+        <div class="row align-items-center g-4 position-relative">
+          <div class="col-xl-6">
+            <div class="d-flex align-items-center gap-3 mb-3">
+              <div class="brand-icon"><i class="bi bi-flower1"></i></div>
+              <div>
+                <h2 class="mb-0 fw-black display-6">Colheiteira</h2>
+                <div class="text-muted">Dashboard Flask para análise web — agora com modo bulk, menus e painel mais parrudo.</div>
+              </div>
+            </div>
+            <p class="lead mb-0">Digite uma URL ou ative o bulk para analisar vários sites em sequência, com logs ao vivo, histórico, gráficos e JSON exportável.</p>
+          </div>
+          <div class="col-xl-6">
+            <form id="analyzeForm" class="soft-card p-3 p-md-4">
+              <div class="bulk-switch-card mb-3">
+                <div class="form-check form-switch d-flex align-items-center gap-2 ps-0">
+                  <input id="bulkToggle" class="form-check-input ms-0" type="checkbox" role="switch" style="width:3.2rem;height:1.55rem;">
+                  <label class="form-check-label fw-bold" for="bulkToggle">Modo bulk</label>
+                  <span id="modeHint" class="tiny">desligado: uma URL por vez</span>
+                </div>
+              </div>
+
+              <div id="singleBox">
+                <label class="form-label fw-semibold">URL para analisar</label>
+                <div class="input-group gap-2">
+                  <input id="urlInput" class="form-control url-input" placeholder="exemplo.com ou https://exemplo.com" autocomplete="url">
+                  <button id="analyzeBtn" class="btn btn-harvest px-4" type="submit"><i class="bi bi-play-circle me-1"></i> Analisar</button>
+                </div>
+              </div>
+
+              <div id="bulkBox" class="d-none">
+                <label class="form-label fw-semibold">Sites para analisar em lote</label>
+                <textarea id="bulkUrls" class="form-control bulk-input" placeholder="https://site1.com\nhttps://site2.com\nhttps://site3.com"></textarea>
+                <div class="d-flex justify-content-between gap-2 mt-2 flex-wrap">
+                  <div class="tiny"><span id="bulkCount">0</span> site(s) detectado(s). Um por linha, vírgula ou ponto e vírgula.</div>
+                  <button id="analyzeBulkBtn" class="btn btn-harvest px-4" type="submit"><i class="bi bi-collection-play me-1"></i> Analisar lote</button>
+                </div>
+              </div>
+
+              <div class="d-flex gap-2 flex-wrap mt-3">
+                <button id="loadLatestBtn" class="btn btn-outline-success btn-soft" type="button"><i class="bi bi-arrow-clockwise"></i> Carregar última</button>
+                <button id="clearCacheBtn" class="btn btn-outline-danger btn-soft" type="button"><i class="bi bi-trash3"></i> Limpar resultado</button>
+                <a class="btn btn-outline-secondary btn-soft" href="/api/export/latest"><i class="bi bi-download"></i> Exportar JSON</a>
+                <span id="jobBadge" class="badge rounded-pill text-bg-light align-self-center px-3 py-2">Pronto</span>
+              </div>
+
+              <div id="bulkProgressBox" class="mt-3 d-none">
+                <div class="d-flex justify-content-between mb-1 tiny"><span id="bulkProgressLabel">Bulk parado</span><span id="bulkProgressPct">0%</span></div>
+                <div class="progress"><div id="bulkProgressBar" class="progress-bar" style="width:0%"></div></div>
+                <div id="bulkCurrentUrl" class="tiny mt-2 text-truncate">--</div>
+              </div>
+            </form>
+          </div>
+        </div>
+      </section>
+
+      <section class="row g-3 mb-4">
+        <div class="col-md-3"><div class="soft-card stat-card"><div class="stat-label">Score final</div><div id="scoreFinal" class="stat-value">--</div><div id="scoreHint" class="tiny mt-2">Sem análise carregada</div></div></div>
+        <div class="col-md-3"><div class="soft-card stat-card"><div class="stat-label">Ranking</div><div id="ranking" class="stat-value">--</div><div id="rankingHint" class="tiny mt-2">A–E</div></div></div>
+        <div class="col-md-3"><div class="soft-card stat-card"><div class="stat-label">Plugins OK</div><div id="pluginsOk" class="stat-value">--</div><div id="pluginsHint" class="tiny mt-2">Plugins executados</div></div></div>
+        <div class="col-md-3"><div class="soft-card stat-card"><div class="stat-label">Duração</div><div id="duration" class="stat-value">--</div><div id="durationHint" class="tiny mt-2">Tempo total</div></div></div>
+      </section>
+
+      <section class="row g-4 mb-4">
+        <div class="col-xl-8">
+          <div class="soft-card p-3 p-md-4 h-100">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <h2 class="h4 mb-0 section-title"><i class="bi bi-activity me-1"></i> Visão geral</h2>
+              <span id="targetUrl" class="tiny text-truncate" style="max-width: 58%;">Nenhuma URL carregada</span>
+            </div>
+            <div id="emptyOverview" class="empty text-center">
+              <i class="bi bi-search display-5 d-block mb-2"></i>
+              Rode uma análise ou carregue a última para acender esse painel. A colheita começa no botão verde.
+            </div>
+            <div id="chartsArea" class="row g-3 d-none">
+              <div class="col-lg-6"><div class="chart-wrap"><canvas id="barChart"></canvas></div></div>
+              <div class="col-lg-6"><div class="chart-wrap"><canvas id="radarChart"></canvas></div></div>
+            </div>
+          </div>
+        </div>
+        <div class="col-xl-4">
+          <div class="soft-card p-3 p-md-4 h-100">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <h2 class="h4 mb-0 section-title"><i class="bi bi-terminal me-1"></i> Logs</h2>
+              <button id="clearLogsBtn" type="button" class="btn btn-sm btn-outline-secondary rounded-pill">Limpar</button>
+            </div>
+            <div id="logs" class="terminal"><div class="log-line"><span class="log-time">--:--:--</span> <span class="log-info">Aguardando análise...</span></div></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="sitesBulk" class="soft-card p-3 p-md-4 mb-4 d-none">
+        <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+          <div>
+            <h2 class="h4 mb-0 section-title"><i class="bi bi-list-check me-1"></i> Sites do lote</h2>
+            <div class="tiny">Resumo individual do modo bulk.</div>
+          </div>
+          <span id="bulkSummaryPill" class="score-pill score-good">--</span>
+        </div>
+        <div id="bulkSitesContainer" class="row g-3"></div>
+      </section>
+
+      <section class="row g-4 mb-4" id="resultados">
+        <div class="col-xl-8">
+          <div class="soft-card p-3 p-md-4">
+            <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+              <h2 class="h4 mb-0 section-title"><i class="bi bi-plug me-1"></i> Resultado por plugin</h2>
+              <div class="d-flex gap-2 flex-wrap">
+                <button id="lighthouseDiagBtn" type="button" class="btn btn-sm btn-outline-primary rounded-pill">Diagnosticar Lighthouse</button>
+                <button id="pluginsBtn" type="button" class="btn btn-sm btn-outline-success rounded-pill">Ver plugins instalados</button>
+              </div>
+            </div>
+            <div id="pluginsContainer" class="row g-3">
+              <div class="col-12"><div class="empty">Nenhum resultado ainda.</div></div>
+            </div>
+          </div>
+        </div>
+        <div class="col-xl-4" id="historico">
+          <div class="soft-card p-3 p-md-4">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <h2 class="h4 mb-0 section-title"><i class="bi bi-clock-history me-1"></i> Histórico</h2>
+              <button id="refreshHistoryBtn" type="button" class="btn btn-sm btn-outline-secondary rounded-pill">Atualizar</button>
+            </div>
+            <div id="historyList" class="d-grid gap-2"><div class="empty">Sem histórico carregado.</div></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="soft-card p-3 p-md-4 mb-4" id="json">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h2 class="h4 mb-0 section-title"><i class="bi bi-braces me-1"></i> JSON bruto</h2>
+          <button id="copyJsonBtn" type="button" class="btn btn-sm btn-outline-secondary rounded-pill">Copiar</button>
+        </div>
+        <pre id="jsonBox" class="json-box mb-0">{}</pre>
+      </section>
+
+      <section id="ajuda" class="help-page mb-4">
+        <div class="help-hero mb-4">
+          <div class="row g-4 align-items-center">
+            <div class="col-xl-6">
+              <span class="guide-tag mb-3"><i class="bi bi-life-preserver"></i> Guia do app</span>
+              <h2 class="display-6 fw-black mb-3">Ajuda da Colheiteira</h2>
+              <p class="lead mb-3">A Colheiteira é um painel local para auditar sites: você informa uma URL, o app executa plugins de qualidade web, calcula score, registra logs, guarda histórico e deixa tudo pronto para consulta ou exportação.</p>
+              <p class="mb-0 text-muted">Use este guia como manual de operação: ele cobre análise única, modo bulk, leitura de resultados, priorização de correções, histórico, JSON, APIs e caminhos para resolver problemas comuns.</p>
+              <nav class="help-nav" aria-label="Atalhos da ajuda">
+                <a href="#ajuda-o-que-faz"><i class="bi bi-stars"></i> O que faz</a>
+                <a href="#ajuda-como-faz"><i class="bi bi-cpu"></i> Como faz</a>
+                <a href="#ajuda-rapida"><i class="bi bi-play-circle"></i> Começo rápido</a>
+                <a href="#ajuda-fluxo"><i class="bi bi-diagram-3"></i> Fluxo recomendado</a>
+                <a href="#ajuda-metricas"><i class="bi bi-speedometer"></i> Métricas</a>
+                <a href="#ajuda-plugins"><i class="bi bi-puzzle"></i> Plugins</a>
+                <a href="#ajuda-bulk"><i class="bi bi-collection-play"></i> Bulk</a>
+                <a href="#ajuda-relatorio"><i class="bi bi-file-earmark-text"></i> Relatório</a>
+                <a href="#ajuda-problemas"><i class="bi bi-tools"></i> Problemas</a>
+              </nav>
+            </div>
+            <div class="col-xl-6">
+              <figure class="mb-0">
+                <img class="help-shot" src="/static/help-dashboard.png" alt="Print do painel Colheiteira com menu lateral, formulário de análise, métricas e logs">
+                <figcaption class="tiny mt-2">Imagem de referência do painel principal: menu, formulário, métricas, gráficos, logs e histórico trabalham juntos na mesma tela.</figcaption>
+              </figure>
+            </div>
+          </div>
+        </div>
+
+        <div class="row g-3 mb-4">
+          <div class="col-md-6 col-xl-3">
+            <div class="guide-panel">
+              <div class="d-flex gap-3 align-items-start">
+                <div class="guide-icon"><i class="bi bi-search"></i></div>
+                <div>
+                  <h3 class="h6 fw-bold mb-1">Analisa URLs</h3>
+                  <div class="tiny">Roda uma auditoria completa em um site por vez, normalizando endereços como <code>exemplo.com</code> para uma URL válida.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-6 col-xl-3">
+            <div class="guide-panel">
+              <div class="d-flex gap-3 align-items-start">
+                <div class="guide-icon"><i class="bi bi-list-check"></i></div>
+                <div>
+                  <h3 class="h6 fw-bold mb-1">Processa lotes</h3>
+                  <div class="tiny">No modo bulk, analisa vários sites em sequência com pausas configuráveis entre uma coleta e outra.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-6 col-xl-3">
+            <div class="guide-panel">
+              <div class="d-flex gap-3 align-items-start">
+                <div class="guide-icon"><i class="bi bi-bar-chart"></i></div>
+                <div>
+                  <h3 class="h6 fw-bold mb-1">Resume qualidade</h3>
+                  <div class="tiny">Mostra score final, ranking, plugins executados, duração, gráficos e detalhes por área analisada.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-6 col-xl-3">
+            <div class="guide-panel">
+              <div class="d-flex gap-3 align-items-start">
+                <div class="guide-icon"><i class="bi bi-archive"></i></div>
+                <div>
+                  <h3 class="h6 fw-bold mb-1">Guarda evidências</h3>
+                  <div class="tiny">Salva a última análise, monta histórico e permite exportar o JSON para relatórios, automações ou comparação posterior.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="row g-4 mb-4 help-anchor" id="ajuda-o-que-faz">
+          <div class="col-xl-7">
+            <div class="guide-panel">
+              <div class="guide-kicker mb-2">O que ele faz</div>
+              <h3 class="h4 section-title mb-3"><i class="bi bi-stars me-1"></i> A função da Colheiteira</h3>
+              <p class="tiny">A Colheiteira pega uma página pública da web e transforma essa página em um relatório de auditoria. Ela não fica só dizendo “bom” ou “ruim”: ela separa a análise em áreas, registra o que encontrou e entrega um resultado que pode ser lido no painel, reaberto no histórico ou exportado em JSON.</p>
+              <div class="guide-table-wrap">
+                <table class="guide-table">
+                  <thead>
+                    <tr><th>Ela faz</th><th>Na prática</th></tr>
+                  </thead>
+                  <tbody>
+                    <tr><td>Auditoria de página</td><td>Abre a URL informada, lê o HTML e passa esse conteúdo pelos plugins disponíveis.</td></tr>
+                    <tr><td>Diagnóstico por área</td><td>Separa sinais de SEO, links, imagens, texto, redes sociais e Lighthouse quando disponível.</td></tr>
+                    <tr><td>Pontuação</td><td>Converte problemas e acertos em scores por plugin e em um score final ponderado.</td></tr>
+                    <tr><td>Logs ao vivo</td><td>Mostra cada etapa enquanto a análise roda, para você saber onde está e onde falhou se algo der errado.</td></tr>
+                    <tr><td>Histórico</td><td>Guarda análises antigas para comparação depois de correções ou novas publicações.</td></tr>
+                    <tr><td>Exportação</td><td>Salva o resultado completo em JSON para relatórios, automações ou leitura técnica.</td></tr>
+                    <tr><td>Análise em lote</td><td>Processa várias URLs em sequência, com pausas configuráveis, e gera uma média do lote.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+          <div class="col-xl-5">
+            <div class="guide-panel">
+              <div class="guide-kicker mb-2">Limites importantes</div>
+              <h3 class="h4 section-title mb-3"><i class="bi bi-exclamation-diamond me-1"></i> O que ele não faz sozinho</h3>
+              <ul class="guide-list">
+                <li>Não corrige o site automaticamente. Ele aponta problemas para você decidir e ajustar no projeto original.</li>
+                <li>Não substitui Google Analytics, Search Console ou ferramentas de ranqueamento. Ele audita sinais da página, não o tráfego real.</li>
+                <li>Não burla login, CAPTCHA, bloqueios de rede ou páginas privadas. A URL precisa estar acessível para o servidor local.</li>
+                <li>Não garante posição no Google. SEO depende de conteúdo, concorrência, autoridade, velocidade, intenção de busca e outros fatores externos.</li>
+                <li>Não testa todos os fluxos de negócio, como compra completa, formulário com autenticação ou área logada.</li>
+              </ul>
+              <div class="guide-callout mt-3">Pense nele como uma mesa de triagem: ele organiza sinais importantes para você agir com mais clareza.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="guide-panel mb-4 help-anchor" id="ajuda-como-faz">
+          <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
+            <div>
+              <div class="guide-kicker mb-2">Como ele faz</div>
+              <h3 class="h4 section-title mb-1"><i class="bi bi-cpu me-1"></i> O caminho da análise por dentro</h3>
+              <div class="tiny">Quando você clica em “Analisar”, o painel cria uma tarefa local. Essa tarefa passa por etapas previsíveis até virar resultado.</div>
+            </div>
+            <span class="guide-tag"><i class="bi bi-hdd-network"></i> Tudo local no servidor Flask</span>
+          </div>
+          <div class="workflow">
+            <div class="workflow-item">
+              <strong>1. Normaliza a URL</strong>
+              <div class="tiny">Se você digita <code>exemplo.com</code>, o app tenta transformar em <code>https://exemplo.com</code> e valida se existe domínio.</div>
+            </div>
+            <div class="workflow-item">
+              <strong>2. Cria uma tarefa</strong>
+              <div class="tiny">O servidor registra status, horários, logs e identificador da execução para o painel acompanhar em tempo real.</div>
+            </div>
+            <div class="workflow-item">
+              <strong>3. Carrega plugins</strong>
+              <div class="tiny">Cada pasta dentro de <code>plugins/</code> que tem um <code>plugin.py</code> válido entra na análise automaticamente.</div>
+            </div>
+            <div class="workflow-item">
+              <strong>4. Executa verificações</strong>
+              <div class="tiny">Os plugins acessam a página, leem HTML, links, imagens e metadados, e devolvem score, peso, erro e detalhes.</div>
+            </div>
+            <div class="workflow-item">
+              <strong>5. Calcula e salva</strong>
+              <div class="tiny">O app calcula o score final, define ranking, salva a última análise e cria uma cópia no histórico.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="row g-4 mb-4">
+          <div class="col-lg-6">
+            <div class="guide-panel">
+              <h3 class="h4 section-title mb-3"><i class="bi bi-calculator me-1"></i> Como nasce o score final</h3>
+              <p class="tiny">Cada plugin retorna uma nota de 0 a 100 e um peso. O peso diz quanto aquele plugin influencia no score final. O cálculo é uma média ponderada:</p>
+              <pre class="example-box mb-3">score_final =
+  soma(score_do_plugin * peso_do_plugin)
+  / soma(pesos_dos_plugins_ok)</pre>
+              <ul class="guide-list">
+                <li>Plugins com <code>status: ok</code> entram no cálculo.</li>
+                <li>Plugins com erro aparecem no painel, mas não aumentam a média.</li>
+                <li>Links e imagens têm peso maior que SEO básico nesta configuração atual.</li>
+                <li>O ranking é derivado do score final: A, B, C, D ou E.</li>
+              </ul>
+            </div>
+          </div>
+          <div class="col-lg-6">
+            <div class="guide-panel">
+              <h3 class="h4 section-title mb-3"><i class="bi bi-filetype-json me-1"></i> O que vai para o resultado</h3>
+              <p class="tiny">O relatório salvo é estruturado para ser lido pelo painel e também por outras ferramentas.</p>
+              <pre class="example-box mb-3">{
+  "url": "https://exemplo.com",
+  "inicio": "horário de início",
+  "fim": "horário de fim",
+  "plugins": {
+    "seo": {
+      "status": "ok",
+      "score": 88,
+      "peso": 1.0,
+      "detalhes": {}
+    }
+  },
+  "score_final": 82.4,
+  "ranking": "A (Excelente)"
+}</pre>
+              <div class="guide-callout mb-0">No modo bulk, o JSON também inclui <code>urls</code>, resumo do lote, quantidade de sites OK, erros e resultados individuais.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="row g-4 mb-4">
+          <div class="col-xl-5">
+            <div class="guide-panel">
+              <div class="guide-kicker mb-2">Quando usar</div>
+              <h3 class="h4 section-title mb-3"><i class="bi bi-compass me-1"></i> Situações ideais</h3>
+              <ul class="guide-list">
+                <li>Antes de publicar uma página nova, para encontrar problemas básicos de SEO, links, imagens e compartilhamento.</li>
+                <li>Depois de uma mudança de layout, conteúdo ou tecnologia, para comparar se a qualidade subiu ou caiu.</li>
+                <li>Em auditorias de vários domínios, usando o modo bulk para criar uma visão geral do lote.</li>
+                <li>Ao preparar relatório para cliente, time de marketing, conteúdo ou desenvolvimento.</li>
+                <li>Quando um site “parece bom”, mas você precisa de evidências objetivas para decidir próximos passos.</li>
+              </ul>
+            </div>
+          </div>
+          <div class="col-xl-7">
+            <div class="guide-panel">
+              <div class="guide-kicker mb-2">Como pensar no resultado</div>
+              <h3 class="h4 section-title mb-3"><i class="bi bi-signpost-split me-1"></i> Da coleta para a ação</h3>
+              <div class="guide-callout mb-3">
+                O painel não substitui revisão humana. Ele organiza sinais técnicos e editoriais para você decidir com mais rapidez onde mexer primeiro.
+              </div>
+              <div class="priority-grid">
+                <div class="priority-item danger">
+                  <strong>Corrigir agora</strong>
+                  <div class="tiny">Erros fatais, links quebrados importantes, metadados ausentes em páginas críticas e falhas que impedem leitura ou rastreamento.</div>
+                </div>
+                <div class="priority-item warning">
+                  <strong>Melhorar em seguida</strong>
+                  <div class="tiny">Scores medianos, textos com revisão pendente, imagens sem contexto e oportunidades de SEO que afetam conversão.</div>
+                </div>
+                <div class="priority-item">
+                  <strong>Monitorar</strong>
+                  <div class="tiny">Pequenos ajustes, páginas estáveis, resultados bons e itens que dependem de estratégia ou agenda de conteúdo.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="row g-4 mb-4 help-anchor" id="ajuda-rapida">
+          <div class="col-xl-7">
+            <div class="guide-panel">
+              <h3 class="h4 section-title mb-3"><i class="bi bi-play-circle me-1"></i> Começo rápido</h3>
+              <div class="guide-step">
+                <div class="guide-number">1</div>
+                <div>
+                  <h4 class="h6 fw-bold mb-1">Digite a URL</h4>
+                  <p class="tiny mb-0">No campo “URL para analisar”, cole algo como <code>https://exemplo.com</code> ou apenas <code>exemplo.com</code>. O app tenta completar o protocolo quando necessário.</p>
+                </div>
+              </div>
+              <div class="guide-step">
+                <div class="guide-number">2</div>
+                <div>
+                  <h4 class="h6 fw-bold mb-1">Clique em Analisar</h4>
+                  <p class="tiny mb-0">A coleta começa em segundo plano. Enquanto isso, o painel atualiza logs ao vivo e mostra o status no selo ao lado dos botões.</p>
+                </div>
+              </div>
+              <div class="guide-step">
+                <div class="guide-number">3</div>
+                <div>
+                  <h4 class="h6 fw-bold mb-1">Leia os resultados</h4>
+                  <p class="tiny mb-0">Confira score, ranking, plugins OK, duração, gráficos e cartões de detalhes. Problemas aparecem dentro do plugin correspondente.</p>
+                </div>
+              </div>
+              <div class="guide-step">
+                <div class="guide-number">4</div>
+                <div>
+                  <h4 class="h6 fw-bold mb-1">Salve ou compare</h4>
+                  <p class="tiny mb-0">Use “Exportar JSON” para baixar a análise, “Histórico” para reabrir execuções antigas e “Carregar última” para voltar ao resultado mais recente.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="col-xl-5">
+            <div class="guide-panel">
+              <h3 class="h4 section-title mb-3"><i class="bi bi-window-sidebar me-1"></i> O que há em cada menu</h3>
+              <div class="guide-table-wrap">
+                <table class="guide-table">
+                  <thead>
+                    <tr><th>Menu</th><th>Para que serve</th></tr>
+                  </thead>
+                  <tbody>
+                    <tr><td>Dashboard</td><td>Entrada principal para URL única, cards de métricas, gráficos e logs.</td></tr>
+                    <tr><td>Plugins</td><td>Detalhes de cada verificação executada, incluindo score, peso, erros e recomendações.</td></tr>
+                    <tr><td>Bulk / Sites</td><td>Resumo por site quando uma análise em lote está rodando ou foi concluída.</td></tr>
+                    <tr><td>Histórico</td><td>Lista das análises salvas, com botão para reabrir qualquer execução anterior.</td></tr>
+                    <tr><td>JSON bruto</td><td>Objeto completo retornado pela análise, útil para depuração, exportação e integrações.</td></tr>
+                    <tr><td>Configurações</td><td>Ajustes locais do bulk, limpeza de resultado e atalhos de manutenção.</td></tr>
+                    <tr><td>Ajuda</td><td>Este guia, com exemplos práticos e explicações do funcionamento do app.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="guide-panel mb-4 help-anchor" id="ajuda-fluxo">
+          <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
+            <div>
+              <div class="guide-kicker mb-2">Rotina recomendada</div>
+              <h3 class="h4 section-title mb-1"><i class="bi bi-diagram-3 me-1"></i> Fluxo de auditoria</h3>
+              <div class="tiny">Um processo simples para transformar a análise em melhoria concreta.</div>
+            </div>
+            <span class="guide-tag"><i class="bi bi-clock"></i> 10 a 30 min por rodada</span>
+          </div>
+          <div class="workflow">
+            <div class="workflow-item">
+              <strong>1. Escolha o alvo</strong>
+              <div class="tiny">Comece por páginas importantes: home, páginas de venda, landing pages, categorias, artigos fortes ou páginas com queda de tráfego.</div>
+            </div>
+            <div class="workflow-item">
+              <strong>2. Rode a coleta</strong>
+              <div class="tiny">Use URL única para análise profunda ou bulk para comparar vários sites em sequência.</div>
+            </div>
+            <div class="workflow-item">
+              <strong>3. Leia por plugin</strong>
+              <div class="tiny">Abra os detalhes dos plugins com notas baixas e procure padrões, não só itens isolados.</div>
+            </div>
+            <div class="workflow-item">
+              <strong>4. Priorize ações</strong>
+              <div class="tiny">Separe o que bloqueia resultado, o que melhora qualidade e o que pode ser acompanhado depois.</div>
+            </div>
+            <div class="workflow-item">
+              <strong>5. Compare de novo</strong>
+              <div class="tiny">Depois das correções, rode nova análise e use o histórico para medir evolução.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="mb-4 help-anchor" id="ajuda-metricas">
+          <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
+            <div>
+              <h3 class="h4 section-title mb-1"><i class="bi bi-speedometer me-1"></i> Como interpretar os números</h3>
+              <div class="tiny">O score final é um resumo ponderado das notas dos plugins. Use como bússola: ele aponta onde investigar primeiro.</div>
+            </div>
+            <span class="guide-tag"><i class="bi bi-award"></i> Ranking A-E</span>
+          </div>
+          <div class="metric-guide">
+            <div class="metric-guide-item">
+              <div class="stat-label">Score final</div>
+              <div class="metric-guide-value">0-100</div>
+              <div class="tiny mt-2">Quanto maior, melhor. Em bulk, vira média do lote.</div>
+            </div>
+            <div class="metric-guide-item">
+              <div class="stat-label">Ranking</div>
+              <div class="metric-guide-value">A-E</div>
+              <div class="tiny mt-2">Classificação resumida para triagem rápida.</div>
+            </div>
+            <div class="metric-guide-item">
+              <div class="stat-label">Plugins OK</div>
+              <div class="metric-guide-value">6/6</div>
+              <div class="tiny mt-2">Mostra quantos plugins responderam sem erro fatal.</div>
+            </div>
+            <div class="metric-guide-item">
+              <div class="stat-label">Duração</div>
+              <div class="metric-guide-value">1m 20s</div>
+              <div class="tiny mt-2">Tempo total entre início e fim da coleta.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="guide-panel mb-4">
+          <div class="row g-4 align-items-start">
+            <div class="col-lg-5">
+              <h3 class="h4 section-title mb-3"><i class="bi bi-award me-1"></i> Leitura prática do ranking</h3>
+              <p class="tiny mb-3">Use a nota como indicador de atenção, não como sentença final. Uma página com score alto ainda pode ter um problema de negócio, e uma página com score baixo pode ter poucos ajustes de alto impacto.</p>
+              <div class="guide-callout mb-0">Regra simples: olhe primeiro os plugins com erro ou nota baixa, depois verifique se o problema afeta páginas estratégicas.</div>
+            </div>
+            <div class="col-lg-7">
+              <div class="guide-table-wrap">
+                <table class="guide-table">
+                  <thead>
+                    <tr><th>Faixa</th><th>Como agir</th></tr>
+                  </thead>
+                  <tbody>
+                    <tr><td>80 a 100</td><td>Bom ponto de partida. Procure refinamentos, itens de conteúdo e consistência entre páginas.</td></tr>
+                    <tr><td>60 a 79</td><td>Há oportunidades claras. Priorize plugins com menor score e problemas repetidos.</td></tr>
+                    <tr><td>0 a 59</td><td>Exige atenção. Revise erros, metadados, links, imagens e performance antes de publicar ou escalar tráfego.</td></tr>
+                    <tr><td>Erro</td><td>A coleta não conseguiu concluir algum plugin ou site. Verifique logs, URL, acesso e diagnóstico disponível.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="row g-4 mb-4 help-anchor" id="ajuda-bulk">
+          <div class="col-lg-6">
+            <div class="guide-panel">
+              <h3 class="h4 section-title mb-3"><i class="bi bi-collection-play me-1"></i> Exemplo de análise em lote</h3>
+              <p class="tiny">Ative “Modo bulk”, cole um site por linha e clique em “Analisar lote”. Também funciona com vírgula ou ponto e vírgula.</p>
+              <pre class="example-box mb-3">https://loja-exemplo.com
+https://blog-exemplo.com
+https://institucional-exemplo.com</pre>
+              <ul class="guide-list">
+                <li>O painel mostra o progresso do lote, a URL atual e a pausa restante.</li>
+                <li>Cada site ganha um cartão próprio em “Bulk / Sites”.</li>
+                <li>O resultado final junta tudo em uma média, mas mantém detalhes por site no JSON.</li>
+              </ul>
+            </div>
+          </div>
+          <div class="col-lg-6">
+            <div class="guide-panel">
+              <h3 class="h4 section-title mb-3"><i class="bi bi-sliders me-1"></i> Configurações recomendadas</h3>
+              <div class="guide-table-wrap">
+                <table class="guide-table">
+                  <thead>
+                    <tr><th>Ajuste</th><th>Como usar</th></tr>
+                  </thead>
+                  <tbody>
+                    <tr><td>Pausa mínima</td><td>Tempo menor entre sites. Use pelo menos alguns segundos para evitar rajadas.</td></tr>
+                    <tr><td>Pausa máxima</td><td>Tempo maior sorteado entre análises. Aumente para sites pesados ou muitos domínios.</td></tr>
+                    <tr><td>Máximo por lote</td><td>Limite de URLs aceitas numa rodada. Ajuda a manter execuções controláveis.</td></tr>
+                    <tr><td>Parar no erro</td><td>Interrompe o lote quando um erro fatal aparece. Útil em auditorias sensíveis.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <p class="tiny mb-0">As configurações ficam salvas no navegador usado para abrir o painel.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="guide-panel mb-4">
+          <div class="row g-4 align-items-start">
+            <div class="col-lg-6">
+              <h3 class="h4 section-title mb-3"><i class="bi bi-list-columns-reverse me-1"></i> Como montar um bom lote</h3>
+              <ul class="guide-list">
+                <li>Agrupe páginas parecidas quando quiser comparar qualidade: páginas de produto com produto, posts com posts, landing pages com landing pages.</li>
+                <li>Evite misturar páginas internas com domínios totalmente diferentes se a intenção for tirar uma média representativa.</li>
+                <li>Comece com lotes menores quando estiver testando uma configuração nova.</li>
+                <li>Use nomes de domínio completos quando houver versões diferentes, como <code>www</code>, subdomínios ou caminhos específicos.</li>
+              </ul>
+            </div>
+            <div class="col-lg-6">
+              <h3 class="h4 section-title mb-3"><i class="bi bi-clipboard-check me-1"></i> Checklist antes de rodar</h3>
+              <ul class="guide-list">
+                <li>As URLs abrem no navegador sem login obrigatório?</li>
+                <li>O lote tem pelo menos duas URLs?</li>
+                <li>As pausas estão adequadas para a quantidade de sites?</li>
+                <li>Você quer continuar mesmo se uma URL falhar, ou prefere parar no primeiro erro?</li>
+                <li>O histórico atual pode receber novos resultados ou precisa ser limpo antes?</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <div class="row g-4 mb-4 help-anchor" id="ajuda-plugins">
+          <div class="col-xl-7">
+            <div class="guide-panel">
+              <h3 class="h4 section-title mb-3"><i class="bi bi-puzzle me-1"></i> Plugins e verificações</h3>
+              <div class="guide-table-wrap">
+                <table class="guide-table">
+                  <thead>
+                    <tr><th>Plugin</th><th>O que ajuda a enxergar</th></tr>
+                  </thead>
+                  <tbody>
+                    <tr><td>SEO</td><td>Procura title, meta description, H1, robots, canonical, Open Graph e outros sinais on-page. Penaliza ausências, excesso ou tamanho inadequado.</td></tr>
+                    <tr><td>Links</td><td>Coleta links de navegação, scripts, estilos e imagens, testa até parte deles e marca links quebrados ou lentos.</td></tr>
+                    <tr><td>Imagens</td><td>Lista imagens, verifica texto alternativo, arquivos ausentes, peso/tamanho e indícios de baixa qualidade.</td></tr>
+                    <tr><td>Ortografia</td><td>Extrai texto da página e procura possíveis erros ortográficos ou trechos que precisam de revisão.</td></tr>
+                    <tr><td>Redes sociais</td><td>Procura links para redes sociais e sinais de presença social, como perfis e metadados usados em compartilhamentos.</td></tr>
+                    <tr><td>Lighthouse</td><td>Quando disponível, executa uma auditoria técnica e resume performance, acessibilidade, boas práticas e SEO técnico.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+          <div class="col-xl-5">
+            <div class="guide-panel">
+              <h3 class="h4 section-title mb-3"><i class="bi bi-braces me-1"></i> JSON, exportação e APIs</h3>
+              <p class="tiny">O JSON bruto é o relatório completo. Ele guarda URL, horários, plugins, scores, ranking, detalhes e, no modo bulk, a lista de resultados por site.</p>
+              <pre class="example-box mb-3">{
+  "url": "https://exemplo.com",
+  "score_final": 82.4,
+  "ranking": "A",
+  "plugins": {
+    "seo": { "status": "ok", "score": 88 }
+  }
+}</pre>
+              <div class="micro d-grid gap-1">
+                <code>/api/analyze</code>
+                <code>/api/bulk_analyze</code>
+                <code>/api/jobs/&lt;job_id&gt;</code>
+                <code>/api/history</code>
+                <code>/api/export/latest</code>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="guide-panel mb-4">
+          <h3 class="h4 section-title mb-3"><i class="bi bi-question-square me-1"></i> Perguntas de interpretação</h3>
+          <div class="guide-table-wrap">
+            <table class="guide-table">
+              <thead>
+                <tr><th>Pergunta</th><th>Resposta prática</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>Plugin OK significa nota alta?</td><td>Não. OK significa que o plugin conseguiu rodar. A nota pode ser baixa se ele encontrou muitos problemas.</td></tr>
+                <tr><td>Por que um plugin com erro não para tudo?</td><td>O motor isola falhas. Se um plugin falha, os outros continuam, e o erro fica registrado no resultado.</td></tr>
+                <tr><td>Por que a mesma URL pode variar?</td><td>Sites mudam, recursos externos podem responder diferente e algumas auditorias dependem de rede, tempo de resposta e disponibilidade.</td></tr>
+                <tr><td>Por que o bulk demora?</td><td>Ele roda sites em sequência e pode esperar uma pausa entre eles para evitar muitas requisições seguidas.</td></tr>
+                <tr><td>O que revisar primeiro?</td><td>Comece por erros, depois plugins com score baixo, depois páginas estratégicas com impacto em tráfego, venda ou reputação.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="row g-4 mb-4 help-anchor" id="ajuda-relatorio">
+          <div class="col-xl-6">
+            <div class="guide-panel">
+              <h3 class="h4 section-title mb-3"><i class="bi bi-file-earmark-text me-1"></i> Exemplo de resumo para relatório</h3>
+              <div class="report-preview">
+                <h4>Auditoria de exemplo</h4>
+                <div class="report-line"><span>URL analisada</span><strong>https://exemplo.com</strong></div>
+                <div class="report-line"><span>Score final</span><strong>82.40</strong></div>
+                <div class="report-line"><span>Ranking</span><strong>A</strong></div>
+                <div class="report-line"><span>Pontos fortes</span><strong>SEO e redes sociais consistentes</strong></div>
+                <div class="report-line"><span>Prioridade</span><strong>Revisar imagens e links internos</strong></div>
+              </div>
+            </div>
+          </div>
+          <div class="col-xl-6">
+            <div class="guide-panel">
+              <h3 class="h4 section-title mb-3"><i class="bi bi-chat-left-text me-1"></i> Modelo de comentário</h3>
+              <p class="tiny">Depois de analisar, você pode transformar o resultado em uma mensagem simples para o time.</p>
+              <pre class="example-box mb-0">Resumo da Colheiteira:
+- Página: https://exemplo.com
+- Score final: 82.40, ranking A
+- Plugins com atenção: imagens e links
+- Próxima ação: corrigir links internos quebrados e revisar textos alternativos das imagens
+- Depois disso: rodar nova análise e comparar no histórico</pre>
+            </div>
+          </div>
+        </div>
+
+        <div class="guide-panel mb-4">
+          <h3 class="h4 section-title mb-3"><i class="bi bi-journal-text me-1"></i> Glossário rápido</h3>
+          <dl class="glossary-grid mb-0">
+            <div>
+              <dt>Plugin</dt>
+              <dd>Módulo de verificação que analisa uma área específica do site, como SEO, links ou imagens.</dd>
+            </div>
+            <div>
+              <dt>Score</dt>
+              <dd>Nota de 0 a 100 usada para resumir a qualidade encontrada por um plugin ou pela análise final.</dd>
+            </div>
+            <div>
+              <dt>Peso</dt>
+              <dd>Importância relativa de um plugin no cálculo do score final.</dd>
+            </div>
+            <div>
+              <dt>Bulk</dt>
+              <dd>Modo de análise em lote, usado para processar várias URLs em sequência.</dd>
+            </div>
+            <div>
+              <dt>JSON bruto</dt>
+              <dd>Relatório completo em formato estruturado, ideal para exportação, inspeção e integração.</dd>
+            </div>
+            <div>
+              <dt>Histórico</dt>
+              <dd>Lista de análises antigas salva localmente para consulta e comparação.</dd>
+            </div>
+          </dl>
+        </div>
+
+        <div class="row g-4 help-anchor" id="ajuda-problemas">
+          <div class="col-lg-6">
+            <div class="guide-panel">
+              <h3 class="h4 section-title mb-3"><i class="bi bi-tools me-1"></i> Problemas comuns</h3>
+              <ul class="guide-list">
+                <li><strong>“Digite uma URL”:</strong> o campo está vazio. Cole o domínio e tente novamente.</li>
+                <li><strong>“Bulk precisa de 2+ sites”:</strong> o modo lote foi ativado com uma única URL.</li>
+                <li><strong>Lighthouse indisponível:</strong> use “Diagnosticar Lighthouse” em Plugins para ver o motivo no JSON.</li>
+                <li><strong>Site com erro:</strong> confirme se a página abre no navegador e se não exige login, CAPTCHA ou bloqueio de rede.</li>
+                <li><strong>Histórico confuso:</strong> use “Limpar resultado” para apagar apenas a última análise ou “Limpar resultado + histórico” nas Configurações.</li>
+              </ul>
+            </div>
+          </div>
+          <div class="col-lg-6">
+            <div class="guide-panel">
+              <h3 class="h4 section-title mb-3"><i class="bi bi-check2-circle me-1"></i> Boas práticas</h3>
+              <ul class="guide-list">
+                <li>Prefira URLs completas com <code>https://</code> quando souber o endereço exato.</li>
+                <li>Rode uma nova análise depois de corrigir páginas para comparar evolução pelo histórico.</li>
+                <li>No bulk, use pausas maiores quando houver muitos sites ou páginas pesadas.</li>
+                <li>Trate o score como ponto de partida: abra os detalhes de cada plugin antes de decidir prioridades.</li>
+                <li>Exporte o JSON quando precisar anexar evidências a um relatório ou compartilhar com outra ferramenta.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div class="offcanvas offcanvas-end" tabindex="-1" id="settingsCanvas" aria-labelledby="settingsCanvasLabel">
+    <div class="offcanvas-header">
+      <div>
+        <h5 class="offcanvas-title fw-bold" id="settingsCanvasLabel"><i class="bi bi-sliders me-1"></i> Configurações</h5>
+        <div class="tiny">Ajustes locais do dashboard. Ficam salvos no navegador.</div>
+      </div>
+      <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Fechar"></button>
+    </div>
+    <div class="offcanvas-body">
+      <div class="soft-card p-3 mb-3">
+        <h6 class="fw-bold mb-3">Modo bulk</h6>
+        <div class="row g-2">
+          <div class="col-6">
+            <label class="form-label tiny fw-bold">Pausa mínima (s)</label>
+            <input id="minDelay" type="number" min="3" max="600" step="1" class="form-control settings-input" value="8">
+          </div>
+          <div class="col-6">
+            <label class="form-label tiny fw-bold">Pausa máxima (s)</label>
+            <input id="maxDelay" type="number" min="3" max="900" step="1" class="form-control settings-input" value="25">
+          </div>
+          <div class="col-12">
+            <label class="form-label tiny fw-bold">Máximo de sites por lote</label>
+            <input id="maxUrls" type="number" min="1" max="100" step="1" class="form-control settings-input" value="30">
+          </div>
+        </div>
+        <div class="form-check form-switch mt-3">
+          <input id="stopOnError" class="form-check-input" type="checkbox" role="switch">
+          <label class="form-check-label" for="stopOnError">Parar lote no primeiro erro fatal</label>
+        </div>
+        <div class="tiny mt-3">Recomendação: use pausas maiores para sites pesados. O objetivo é evitar rajada, não martelar servidor alheio feito britadeira possuída.</div>
+      </div>
+
+      <div class="soft-card p-3 mb-3">
+        <h6 class="fw-bold mb-3">Ações rápidas</h6>
+        <div class="d-grid gap-2">
+          <button id="saveSettingsBtn" class="btn btn-success btn-soft" type="button"><i class="bi bi-save"></i> Salvar configurações</button>
+          <button id="resetSettingsBtn" class="btn btn-outline-secondary btn-soft" type="button"><i class="bi bi-arrow-counterclockwise"></i> Restaurar padrão</button>
+          <button id="clearHistoryBtn" class="btn btn-outline-danger btn-soft" type="button"><i class="bi bi-trash3"></i> Limpar resultado + histórico</button>
+        </div>
+      </div>
+
+      <div class="soft-card p-3">
+        <h6 class="fw-bold mb-2">APIs úteis</h6>
+        <div class="micro d-grid gap-1">
+          <code>/api/analyze</code>
+          <code>/api/bulk_analyze</code>
+          <code>/api/jobs/&lt;job_id&gt;</code>
+          <code>/api/history</code>
+          <code>/api/export/latest</code>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    let currentJobId = null;
+    let pollTimer = null;
+    let lastData = null;
+    let barChart = null;
+    let radarChart = null;
+
+    const defaultSettings = { min_delay: 8, max_delay: 25, max_urls: 30, stop_on_error: false };
+    const pluginLabels = {
+      ortografia: 'Ortografia', links: 'Links', imagens: 'Imagens',
+      social_media: 'Redes sociais', lighthouse: 'Lighthouse', seo: 'SEO'
+    };
+    const pluginIcons = {
+      ortografia: 'bi-spellcheck', links: 'bi-link-45deg', imagens: 'bi-images',
+      social_media: 'bi-share', lighthouse: 'bi-speedometer2', seo: 'bi-search'
+    };
+
+    function escapeHtml(value) {
+      return String(value ?? '').replace(/[&<>'"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[ch]));
+    }
+    function asNumber(value, fallback = 0) { const n = Number(value); return Number.isFinite(n) ? n : fallback; }
+    function clamp(value, min, max, fallback) { const n = asNumber(value, fallback); return Math.max(min, Math.min(max, n)); }
+    function scoreClass(score) { score = asNumber(score); if (score >= 80) return 'score-good'; if (score >= 60) return 'score-mid'; return 'score-bad'; }
+    function fmtDate(value) { if (!value) return '--'; const d = new Date(value); if (Number.isNaN(d.getTime())) return value; return d.toLocaleString('pt-BR'); }
+    function fmtDuration(start, end) {
+      if (!start || !end) return '--'; const a = new Date(start).getTime(); const b = new Date(end).getTime();
+      if (!Number.isFinite(a) || !Number.isFinite(b)) return '--'; const s = Math.max(0, Math.round((b - a) / 1000));
+      if (s < 60) return `${s}s`; return `${Math.floor(s / 60)}m ${s % 60}s`;
+    }
+    function setBadge(text, kind = 'light') { $('jobBadge').className = `badge rounded-pill text-bg-${kind} align-self-center px-3 py-2`; $('jobBadge').innerHTML = text; }
+
+    function readSettings() {
+      return {
+        min_delay: clamp($('minDelay').value, 3, 600, defaultSettings.min_delay),
+        max_delay: clamp($('maxDelay').value, 3, 900, defaultSettings.max_delay),
+        max_urls: Math.round(clamp($('maxUrls').value, 1, 100, defaultSettings.max_urls)),
+        stop_on_error: $('stopOnError').checked,
+      };
+    }
+    function applySettings(settings) {
+      $('minDelay').value = settings.min_delay ?? defaultSettings.min_delay;
+      $('maxDelay').value = settings.max_delay ?? defaultSettings.max_delay;
+      $('maxUrls').value = settings.max_urls ?? defaultSettings.max_urls;
+      $('stopOnError').checked = Boolean(settings.stop_on_error);
+    }
+    function saveSettings() { const settings = readSettings(); localStorage.setItem('colheiteiraSettings', JSON.stringify(settings)); setBadge('Configurações salvas', 'success'); return settings; }
+    function loadSettings() {
+      try { const saved = JSON.parse(localStorage.getItem('colheiteiraSettings') || 'null'); applySettings(saved || defaultSettings); }
+      catch { applySettings(defaultSettings); }
+    }
+    function resetSettings() { applySettings(defaultSettings); localStorage.removeItem('colheiteiraSettings'); setBadge('Padrão restaurado', 'warning'); }
+
+    function splitUrls(text) {
+      return String(text || '').split(/[\n,;\t]+/).map(x => x.trim()).filter(Boolean);
+    }
+    function updateBulkCount() { $('bulkCount').textContent = splitUrls($('bulkUrls').value).length; }
+    function setBulkMode(enabled) {
+      $('bulkToggle').checked = enabled;
+      $('singleBox').classList.toggle('d-none', enabled);
+      $('bulkBox').classList.toggle('d-none', !enabled);
+      $('modeHint').textContent = enabled ? 'ligado: vários sites em sequência' : 'desligado: uma URL por vez';
+      updateBulkCount();
+    }
+
+    function logLine(entry) {
+      const level = escapeHtml(entry.level || 'info'); const msg = escapeHtml(entry.message || ''); const time = escapeHtml(entry.time || '--:--:--');
+      return `<div class="log-line"><span class="log-time">${time}</span> <span class="log-${level}">${msg}</span></div>`;
+    }
+    function setLogs(logs) {
+      if (!logs || !logs.length) { $('logs').innerHTML = '<div class="log-line"><span class="log-time">--:--:--</span> <span class="log-info">Aguardando análise...</span></div>'; return; }
+      $('logs').innerHTML = logs.map(logLine).join(''); $('logs').scrollTop = $('logs').scrollHeight;
+    }
+
+    function renderMetricCards(data) {
+      const plugins = data?.plugins || {}; const list = Object.values(plugins);
+      const ok = list.filter(p => p.status === 'ok').length; const err = list.filter(p => p.status === 'error').length;
+      const score = data?.score_final;
+      $('scoreFinal').textContent = score === undefined ? '--' : asNumber(score).toFixed(2);
+      $('scoreHint').textContent = data?.mode === 'bulk' ? 'Média do lote' : data?.url ? 'Score ponderado' : 'Sem análise carregada';
+      $('ranking').textContent = data?.ranking || '--';
+      $('rankingHint').textContent = data?.fim ? `Finalizado em ${fmtDate(data.fim)}` : 'A–E';
+      $('pluginsOk').textContent = list.length ? `${ok}/${list.length}` : '--';
+      $('pluginsHint').textContent = err ? `${err} com erro` : 'Tudo quieto por aqui';
+      $('duration').textContent = fmtDuration(data?.inicio, data?.fim);
+      $('durationHint').textContent = data?.inicio ? `Início: ${fmtDate(data.inicio)}` : 'Tempo total';
+      if (data?.mode === 'bulk') $('targetUrl').textContent = data.url || `Bulk: ${(data.urls || []).length} sites`;
+      else $('targetUrl').innerHTML = data?.url ? `<a href="${escapeHtml(data.url)}" target="_blank" rel="noreferrer">${escapeHtml(data.url)}</a>` : 'Nenhuma URL carregada';
+    }
+
+    function renderCharts(data) {
+      const plugins = data?.plugins || {}; const entries = Object.entries(plugins);
+      if (!entries.length) { $('emptyOverview').classList.remove('d-none'); $('chartsArea').classList.add('d-none'); return; }
+      $('emptyOverview').classList.add('d-none'); $('chartsArea').classList.remove('d-none');
+      const labels = entries.map(([name]) => pluginLabels[name] || name); const scores = entries.map(([, plugin]) => asNumber(plugin.score));
+      if (barChart) barChart.destroy(); if (radarChart) radarChart.destroy();
+      barChart = new Chart($('barChart'), { type: 'bar', data: { labels, datasets: [{ label: 'Score', data: scores, borderWidth: 1 }] }, options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, max: 100 } }, plugins: { legend: { display: false } } } });
+      radarChart = new Chart($('radarChart'), { type: 'radar', data: { labels, datasets: [{ label: 'Score', data: scores, borderWidth: 2 }] }, options: { responsive: true, maintainAspectRatio: false, scales: { r: { beginAtZero: true, max: 100 } } } });
+    }
+
+    function renderDetails(details) {
+      if (!details || typeof details !== 'object' || !Object.keys(details).length) return '<div class="tiny">Sem detalhes adicionais.</div>';
+      const bits = [];
+      for (const [key, value] of Object.entries(details)) {
+        if (['concorrentes', 'problemas', 'por_site'].includes(key)) continue;
+        if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') bits.push(`<div><strong>${escapeHtml(key)}:</strong> ${escapeHtml(value)}</div>`);
+      }
+      if (Array.isArray(details.por_site) && details.por_site.length) {
+        bits.push(`<hr><strong>Por site:</strong>`);
+        details.por_site.slice(0, 8).forEach(item => bits.push(`<div class="tiny d-flex justify-content-between gap-2"><span class="text-truncate">${escapeHtml(item.url)}</span><strong>${asNumber(item.score).toFixed(2)}</strong></div>`));
+      }
+      if (Array.isArray(details.problemas) && details.problemas.length) {
+        bits.push(`<hr><strong>Problemas principais:</strong>`);
+        details.problemas.slice(0, 6).forEach(item => { const text = typeof item === 'object' ? JSON.stringify(item, null, 2) : String(item); bits.push(`<pre class="mb-2 tiny">${escapeHtml(text)}</pre>`); });
+      }
+      if (Array.isArray(details.concorrentes) && details.concorrentes.length) {
+        bits.push(`<hr><strong>Referências/concorrentes:</strong>`);
+        details.concorrentes.slice(0, 4).forEach(item => { const url = item.url ? `<a href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer">abrir</a>` : ''; bits.push(`<div class="tiny mb-2"><strong>${escapeHtml(item.nome || 'Concorrente')}</strong> ${url}<br>${escapeHtml(item.motivo || '')}</div>`); });
+      }
+      if (!bits.length) bits.push(`<pre class="tiny mb-0">${escapeHtml(JSON.stringify(details, null, 2))}</pre>`);
+      return bits.join('');
+    }
+
+    function renderPlugins(data) {
+      const plugins = data?.plugins || {}; const entries = Object.entries(plugins);
+      if (!entries.length) { $('pluginsContainer').innerHTML = '<div class="col-12"><div class="empty">Nenhum resultado ainda.</div></div>'; return; }
+      $('pluginsContainer').innerHTML = entries.map(([name, plugin]) => {
+        const score = asNumber(plugin.score); const status = plugin.status || 'ok'; const icon = pluginIcons[name] || 'bi-puzzle'; const title = pluginLabels[name] || name;
+        const error = plugin.erro ? `<div class="alert alert-danger py-2 mt-3 mb-0"><i class="bi bi-exclamation-triangle"></i> ${escapeHtml(plugin.erro)}</div>` : '';
+        return `<div class="col-lg-6"><article class="plugin-card"><div class="d-flex justify-content-between gap-3 align-items-start"><div><h3 class="h5 mb-1"><i class="bi ${icon} me-1"></i>${escapeHtml(title)}</h3><div class="tiny">Status: ${escapeHtml(status)} · Peso: ${escapeHtml(plugin.peso ?? '--')}</div></div><span class="score-pill ${scoreClass(score)}">${score.toFixed(2)}</span></div>${error}<div class="details-box mt-3">${renderDetails(plugin.detalhes || {})}</div></article></div>`;
+      }).join('');
+    }
+
+    function renderBulkSites(data) {
+      const results = data?.results || [];
+      const isBulk = data?.mode === 'bulk' || results.length > 1;
+      $('sitesBulk').classList.toggle('d-none', !isBulk);
+      if (!isBulk) { $('bulkSitesContainer').innerHTML = ''; return; }
+      const bulk = data.bulk || {};
+      $('bulkSummaryPill').textContent = `${bulk.ok ?? 0}/${bulk.total ?? results.length} OK · média ${asNumber(bulk.score_medio ?? data.score_final).toFixed(2)}`;
+      $('bulkSummaryPill').className = `score-pill ${scoreClass(bulk.score_medio ?? data.score_final)}`;
+      $('bulkSitesContainer').innerHTML = results.map((item, idx) => {
+        const score = asNumber(item.score_final);
+        const ok = item.status !== 'error';
+        return `<div class="col-lg-4"><article class="site-card"><div class="d-flex justify-content-between gap-2 align-items-start"><div><div class="tiny fw-bold">#${idx + 1}</div><h3 class="h6 mb-1 text-truncate">${escapeHtml(item.url || 'Site')}</h3><div class="tiny">${escapeHtml(item.ranking || item.erro || '')}</div></div><span class="score-pill ${ok ? scoreClass(score) : 'score-bad'}">${ok ? score.toFixed(2) : 'erro'}</span></div><div class="tiny mt-3">Plugins: ${escapeHtml(item.plugins_ok ?? '--')}/${escapeHtml(item.plugins_total ?? '--')} · ${fmtDuration(item.inicio, item.fim)}</div></article></div>`;
+      }).join('');
+    }
+
+    function renderJson(data) { $('jsonBox').textContent = JSON.stringify(data || {}, null, 2); }
+    function renderAll(data) { lastData = data; renderMetricCards(data); renderCharts(data); renderPlugins(data); renderBulkSites(data); renderJson(data); }
+
+    function updateProgressFromJob(job) {
+      const isBulk = job.mode === 'bulk';
+      $('bulkProgressBox').classList.toggle('d-none', !isBulk && job.status !== 'running');
+      if (!isBulk) return;
+      const total = asNumber(job.total, 0); const completed = asNumber(job.completed, 0); const pct = total ? Math.round((completed / total) * 100) : 0;
+      $('bulkProgressBar').style.width = `${pct}%`; $('bulkProgressPct').textContent = `${pct}%`;
+      const delay = asNumber(job.delay_remaining, 0);
+      const current = job.current_url ? `Agora: ${job.current_url}` : 'Aguardando próximo site';
+      $('bulkProgressLabel').textContent = delay > 0 ? `Pausa: ${delay}s restantes` : `${completed}/${total} concluído(s)`;
+      $('bulkCurrentUrl').textContent = current;
+    }
+
+    async function loadLatest() {
+      try { const res = await fetch('/api/data'); const data = await res.json(); if (!res.ok || data.error) throw new Error(data.error || 'Erro ao carregar última análise'); renderAll(data); setBadge('Última carregada', 'success'); }
+      catch (err) { setBadge('Sem última análise', 'warning'); renderJson({ error: err.message }); }
+    }
+
+    async function refreshHistory() {
+      try {
+        const res = await fetch('/api/history'); const items = await res.json();
+        if (!Array.isArray(items) || !items.length) { $('historyList').innerHTML = '<div class="empty">Histórico vazio.</div>'; return; }
+        $('historyList').innerHTML = items.map(item => {
+          const isBulk = item.mode === 'bulk';
+          const sub = isBulk ? `${item.sites_ok ?? '--'}/${item.sites_total ?? '--'} sites · ${fmtDate(item.modified_at)}` : `${escapeHtml(item.ranking || '')} · ${fmtDate(item.modified_at)}`;
+          return `<div class="history-item"><div class="d-flex justify-content-between gap-2"><strong class="text-truncate">${escapeHtml(item.url || item.file)}</strong><span class="score-pill ${scoreClass(item.score_final)}">${item.score_final ?? '--'}</span></div><div class="tiny mt-1">${sub}</div><div class="d-flex gap-2 mt-2"><button class="btn btn-sm btn-outline-success rounded-pill" onclick="openHistory('${escapeHtml(item.file)}')">Abrir</button><span class="tiny align-self-center">${escapeHtml(item.plugins_ok ?? '--')}/${escapeHtml(item.plugins_total ?? '--')} plugins</span></div></div>`;
+        }).join('');
+      } catch (err) { $('historyList').innerHTML = `<div class="empty">Erro ao carregar histórico: ${escapeHtml(err.message)}</div>`; }
+    }
+
+    async function openHistory(file) {
+      const res = await fetch(`/api/result/${encodeURIComponent(file)}`); const data = await res.json();
+      if (!res.ok || data.error) { setBadge(data.error || 'Erro ao abrir histórico', 'danger'); return; }
+      renderAll(data); setBadge('Histórico aberto', 'success');
+    }
+    window.openHistory = openHistory;
+
+    async function pollJob() {
+      if (!currentJobId) return;
+      const res = await fetch(`/api/jobs/${currentJobId}`); const job = await res.json();
+      if (!res.ok) { setBadge('Job sumiu', 'danger'); clearInterval(pollTimer); return; }
+      setLogs(job.logs || []); updateProgressFromJob(job);
+      if (job.status === 'queued') setBadge('<span class="spinner-grow me-1"></span> Na fila', 'secondary');
+      if (job.status === 'running') {
+        const prefix = job.mode === 'bulk' ? `Bulk ${job.completed || 0}/${job.total || 0}` : 'Analisando';
+        setBadge(`<span class="spinner-grow me-1"></span> ${prefix}`, 'primary');
+        if (job.site_results && job.site_results.length) renderBulkSites({ mode: 'bulk', results: job.site_results, bulk: { ok: job.site_results.filter(x => x.status !== 'error').length, total: job.total, score_medio: 0 } });
+      }
+      if (job.status === 'done') {
+        clearInterval(pollTimer); pollTimer = null; currentJobId = null; renderAll(job.result); await refreshHistory(); setBadge(job.mode === 'bulk' ? 'Bulk concluído' : 'Análise concluída', 'success'); $('analyzeBtn').disabled = false; $('analyzeBulkBtn').disabled = false;
+      }
+      if (job.status === 'error') {
+        clearInterval(pollTimer); pollTimer = null; currentJobId = null; renderJson(job); setBadge('Erro na análise', 'danger'); $('analyzeBtn').disabled = false; $('analyzeBulkBtn').disabled = false;
+      }
+    }
+
+    $('analyzeForm').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const bulkMode = $('bulkToggle').checked;
+      const url = $('urlInput').value.trim();
+      const urls = splitUrls($('bulkUrls').value);
+      if (!bulkMode && !url) { setBadge('Digite uma URL', 'warning'); return; }
+      if (bulkMode && !urls.length) { setBadge('Cole pelo menos uma URL', 'warning'); return; }
+      if (bulkMode && urls.length < 2) { setBadge('Bulk precisa de 2+ sites', 'warning'); return; }
+
+      $('analyzeBtn').disabled = true; $('analyzeBulkBtn').disabled = true;
+      setLogs([{ time: new Date().toLocaleTimeString('pt-BR'), level: 'info', message: bulkMode ? 'Preparando análise em lote...' : 'Preparando análise...' }]);
+      try {
+        const endpoint = bulkMode ? '/api/bulk_analyze' : '/api/analyze';
+        const body = bulkMode ? { urls, settings: saveSettings() } : { url };
+        const res = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        const data = await res.json(); if (!res.ok || data.error) throw new Error(data.error || 'Não foi possível iniciar');
+        currentJobId = data.job_id; setBadge('<span class="spinner-grow me-1"></span> Iniciado', 'primary');
+        if (pollTimer) clearInterval(pollTimer); pollTimer = setInterval(pollJob, 1200); await pollJob();
+      } catch (err) { setBadge(err.message, 'danger'); $('analyzeBtn').disabled = false; $('analyzeBulkBtn').disabled = false; }
+    });
+
+    $('bulkToggle').addEventListener('change', ev => setBulkMode(ev.target.checked));
+    $('bulkUrls').addEventListener('input', updateBulkCount);
+    $('loadLatestBtn').addEventListener('click', loadLatest);
+    $('refreshHistoryBtn').addEventListener('click', refreshHistory);
+    $('refreshHistoryTopBtn').addEventListener('click', refreshHistory);
+    $('clearLogsBtn').addEventListener('click', () => setLogs([]));
+    $('saveSettingsBtn').addEventListener('click', saveSettings);
+    $('resetSettingsBtn').addEventListener('click', resetSettings);
+    $('copyJsonBtn').addEventListener('click', async () => { try { await navigator.clipboard.writeText($('jsonBox').textContent); setBadge('JSON copiado', 'success'); } catch { setBadge('Não consegui copiar', 'warning'); } });
+    $('pluginsBtn').addEventListener('click', async () => { const res = await fetch('/api/plugins'); const plugins = await res.json(); renderJson({ plugins_instalados: plugins }); setBadge('Plugins listados no JSON', 'success'); });
+    $('lighthouseDiagBtn').addEventListener('click', async () => { const res = await fetch('/api/diagnostics/lighthouse'); const diag = await res.json(); renderJson({ diagnostico_lighthouse: diag }); setBadge(diag.ok ? `Lighthouse OK: ${diag.version || diag.command}` : 'Lighthouse não visível para o Flask', diag.ok ? 'success' : 'danger'); });
+    $('clearCacheBtn').addEventListener('click', async () => { const res = await fetch('/api/cache/clear', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ include_history: false }) }); const data = await res.json(); setBadge(data.removed?.length ? 'Resultado antigo apagado' : 'Nada antigo para apagar', 'warning'); renderJson({ cache: data }); renderAll({}); await refreshHistory(); setLogs([]); });
+    $('clearHistoryBtn').addEventListener('click', async () => { if (!confirm('Apagar resultado atual e todo o histórico?')) return; const res = await fetch('/api/cache/clear', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ include_history: true }) }); const data = await res.json(); setBadge(`Removidos: ${data.removed?.length || 0}`, 'warning'); renderAll({}); await refreshHistory(); setLogs([]); });
+    document.querySelectorAll('.nav-pill[href^="#"]').forEach(link => {
+      link.addEventListener('click', () => {
+        document.querySelectorAll('.nav-pill').forEach(item => item.classList.remove('active'));
+        link.classList.add('active');
+      });
+    });
+
+    loadSettings(); setBulkMode(false); refreshHistory(); loadLatest();
+  </script>
+</body>
+</html>
