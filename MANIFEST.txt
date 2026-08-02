@@ -1,26 +1,27 @@
 COLHEITEIRA — MANIFESTO DO PACOTE
-Gerado em: 2026-08-01
+Gerado em: 2026-08-02
 
-Arquivos do projeto (ambiente virtual omitido desta listagem):
+Arquivos do projeto:
+MANIFEST.txt
 .dockerignore
 .gitignore
+ALTERACOES_CONCORRENCIA_CALIBRACAO.md
 ALTERACOES_LOGIN.md
 ALTERACOES_RAILWAY_SUPABASE.md
 CHECKLIST.md
 DISTRIBUI#U00c7#U00c3O.md
 Dockerfile
 ESTRUTURA.md
-MANIFEST.txt
 Procfile
 QUICKSTART.md
 README.md
 clear_output.bat
-clear_output.bat.bak
 config/.env.example
 config/config.json
 core/__init__.py
 core/analyzer.py
 core/config_loader.py
+core/http_client.py
 core/plugin_loader.py
 core/scorer.py
 core/storage.py
@@ -33,10 +34,7 @@ docs/RAILWAY_SUPABASE.md
 main.py
 open_cmd.bat
 output/.gitkeep
-output/data.json
 output/history/.gitkeep
-output/history/20260703_140147_bulk_21_sites.json
-package-info.json
 plugins/__init__.py
 plugins/imagens/__init__.py
 plugins/imagens/plugin.py
@@ -55,24 +53,19 @@ plugins/social_media/plugin.py
 railway.json
 requirements.txt
 run.bat
-run.bat.bak
 run.sh
 run_dashboard.bat
-run_dashboard.bat.bak
 run_dashboard.sh
 scripts/check_lighthouse.py
 scripts/clear_output.py
 scripts/criar_zip.py
 scripts/migrate_history_to_db.py
 scripts/run.bat
-scripts/run.bat.bak
 scripts/run.sh
 scripts/setup.bat
-scripts/setup.bat.bak
 scripts/setup.sh
 server/app.py
 setup.bat
-setup.bat.bak
 setup.sh
 start.sh
 static/help-dashboard.png
@@ -80,4 +73,6 @@ templates/dashboard.html
 templates/dashboard_dynamic.html
 templates/login.html
 tests/test_auth.py
+tests/test_calibration.py
+tests/test_plugin_calibration.py
 tests/test_storage.py

@@ -12,7 +12,7 @@
 
 ## Railway
 
-- `Dockerfile` com Python, Node.js, Chromium, Lighthouse e Java.
+- `Dockerfile` com Python, Node.js, Chromium e Lighthouse; ortografia em Python puro.
 - `railway.json` com Dockerfile, healthcheck `/health` e política de restart.
 - `start.sh` com Gunicorn, porta dinâmica via `PORT` e um worker para manter os jobs em memória coerentes.
 - `Procfile` como fallback.

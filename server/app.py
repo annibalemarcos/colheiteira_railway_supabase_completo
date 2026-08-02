@@ -18,6 +18,7 @@ import sys
 import threading
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -67,6 +68,7 @@ DEFAULT_BULK_SETTINGS = {
     "max_delay": 25.0,
     "max_urls": 30,
     "stop_on_error": False,
+    "concurrency": 1,
 }
 
 PUBLIC_ENDPOINTS = {"login", "health", "static"}
@@ -137,6 +139,7 @@ def bulk_settings_from_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
         "max_delay": round(max_delay, 2),
         "max_urls": clamp_int(raw.get("max_urls"), DEFAULT_BULK_SETTINGS["max_urls"], 1, 100),
         "stop_on_error": bool(raw.get("stop_on_error", DEFAULT_BULK_SETTINGS["stop_on_error"])),
+        "concurrency": clamp_int(raw.get("concurrency"), DEFAULT_BULK_SETTINGS["concurrency"], 1, 3),
     }
 
 
@@ -211,6 +214,7 @@ def job_public(job: Dict[str, Any]) -> Dict[str, Any]:
         "completed": job.get("completed", 0),
         "current_index": job.get("current_index", 0),
         "current_url": job.get("current_url"),
+        "active_urls": job.get("active_urls", []),
         "site_results": job.get("site_results", []),
         "summary": {
             "score_final": result.get("score_final"),
@@ -329,16 +333,21 @@ def run_job(job_id: str, url: str) -> None:
 
 def summarize_site_result(data: Dict[str, Any]) -> Dict[str, Any]:
     plugins = data.get("plugins", {})
+    analysis_status = data.get("analysis_status", "complete")
     return {
         "url": data.get("url"),
-        "status": "ok",
+        "status": "partial" if analysis_status == "partial" else "ok",
         "score_final": data.get("score_final", 0),
         "ranking": data.get("ranking"),
+        "coverage": data.get("coverage", 100),
+        "confidence": data.get("confidence", "alta"),
+        "rankable": data.get("rankable", True),
         "inicio": data.get("inicio"),
         "fim": data.get("fim"),
         "plugins_total": len(plugins),
-        "plugins_ok": sum(1 for p in plugins.values() if p.get("status") == "ok"),
-        "plugins_error": sum(1 for p in plugins.values() if p.get("status") == "error"),
+        "plugins_ok": sum(1 for plugin in plugins.values() if plugin.get("status") == "ok"),
+        "plugins_error": sum(1 for plugin in plugins.values() if plugin.get("status") == "error"),
+        "plugins_not_applicable": sum(1 for plugin in plugins.values() if plugin.get("status") == "not_applicable"),
         "arquivo_historico": data.get("arquivo_historico"),
     }
 
@@ -356,9 +365,9 @@ def aggregate_bulk_results(urls: List[str], site_results: List[Dict[str, Any]], 
     plugins: Dict[str, Any] = {}
 
     for name in plugin_names:
-        scores: List[float] = []
+        successful_scores: List[float] = []
         weights: List[float] = []
-        status_counts = {"ok": 0, "error": 0}
+        status_counts = {"ok": 0, "error": 0, "not_applicable": 0}
         per_site = []
 
         for item in ok_items:
@@ -366,7 +375,7 @@ def aggregate_bulk_results(urls: List[str], site_results: List[Dict[str, Any]], 
             plugin_data = (result.get("plugins") or {}).get(name)
             if not plugin_data:
                 continue
-            status = plugin_data.get("status", "ok")
+            status = str(plugin_data.get("status", "ok"))
             try:
                 score = float(plugin_data.get("score", 0) or 0)
             except (TypeError, ValueError):
@@ -375,9 +384,11 @@ def aggregate_bulk_results(urls: List[str], site_results: List[Dict[str, Any]], 
                 weight = float(plugin_data.get("peso", 1) or 1)
             except (TypeError, ValueError):
                 weight = 1.0
-            scores.append(score)
+
             weights.append(weight)
-            status_counts["ok" if status == "ok" else "error"] += 1
+            status_counts[status if status in status_counts else "error"] += 1
+            if status == "ok":
+                successful_scores.append(score)
             per_site.append({
                 "url": result.get("url") or item.get("url"),
                 "status": status,
@@ -385,26 +396,39 @@ def aggregate_bulk_results(urls: List[str], site_results: List[Dict[str, Any]], 
                 "erro": plugin_data.get("erro"),
             })
 
-        average = round(sum(scores) / len(scores), 2) if scores else 0
+        average = round(sum(successful_scores) / len(successful_scores), 2) if successful_scores else 0
+        if status_counts["error"]:
+            aggregate_status = "partial" if status_counts["ok"] else "error"
+        elif status_counts["ok"]:
+            aggregate_status = "ok"
+        else:
+            aggregate_status = "not_applicable"
+
         plugins[name] = {
-            "status": "ok" if status_counts["ok"] >= status_counts["error"] else "error",
+            "status": aggregate_status,
             "score": average,
             "peso": round(sum(weights) / len(weights), 2) if weights else 1,
             "detalhes": {
                 "sites_analisados": len(per_site),
+                "sites_com_score": len(successful_scores),
                 "media_score": average,
                 "ok": status_counts["ok"],
                 "erros": status_counts["error"],
+                "nao_aplicavel": status_counts["not_applicable"],
                 "por_site": per_site,
             },
         }
 
-    score_values = [float((item.get("result") or {}).get("score_final", 0) or 0) for item in ok_items]
+    comparable_items = [item for item in ok_items if bool((item.get("result") or {}).get("rankable", True))]
+    score_source = comparable_items or ok_items
+    score_values = [float((item.get("result") or {}).get("score_final", 0) or 0) for item in score_source]
     avg_score = round(sum(score_values) / len(score_values), 2) if score_values else 0
-    ranking = scorer.get_ranking(avg_score)
+    coverage_values = [float((item.get("result") or {}).get("coverage", 0) or 0) for item in ok_items]
+    avg_coverage = round(sum(coverage_values) / len(coverage_values), 2) if coverage_values else 0
+    ranking = scorer.get_ranking(avg_score) if comparable_items else f"Inconclusivo (cobertura média {avg_coverage:.0f}%)"
     ended_at = now_iso()
 
-    result: Dict[str, Any] = {
+    return {
         "mode": "bulk",
         "url": f"Bulk: {len(urls)} site(s)",
         "urls": urls,
@@ -413,14 +437,23 @@ def aggregate_bulk_results(urls: List[str], site_results: List[Dict[str, Any]], 
         "plugins": plugins,
         "score_final": avg_score,
         "ranking": ranking,
+        "coverage": avg_coverage,
+        "confidence": "alta" if avg_coverage >= 95 else "média" if avg_coverage >= 80 else "baixa",
+        "rankable": bool(comparable_items),
+        "analysis_status": "partial" if error_items or len(comparable_items) < len(ok_items) else "complete",
         "bulk": {
             "label": f"Bulk: {len(urls)} site(s)",
             "total": len(urls),
             "ok": len(ok_items),
             "error": len(error_items),
+            "comparable": len(comparable_items),
+            "partial": sum(1 for item in ok_items if (item.get("result") or {}).get("analysis_status") == "partial"),
             "delay_min": settings.get("min_delay"),
             "delay_max": settings.get("max_delay"),
+            "concurrency": settings.get("concurrency", 1),
             "score_medio": avg_score,
+            "score_medio_origem": "comparaveis" if comparable_items else "provisorios",
+            "coverage_media": avg_coverage,
         },
         "results": [
             summarize_site_result(item.get("result") or {}) if item.get("status") == "ok" else {
@@ -428,12 +461,12 @@ def aggregate_bulk_results(urls: List[str], site_results: List[Dict[str, Any]], 
                 "status": "error",
                 "erro": item.get("error"),
                 "score_final": 0,
+                "coverage": 0,
+                "rankable": False,
             }
             for item in site_results
         ],
     }
-    return result
-
 
 def save_bulk_result(result: Dict[str, Any]) -> Dict[str, Any]:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -463,59 +496,133 @@ def sleep_with_progress(job_id: str, seconds: float) -> None:
                 job["updated_at"] = now_iso()
 
 
+def _run_bulk_site(job_id: str, index: int, total: int, url: str) -> Dict[str, Any]:
+    with jobs_lock:
+        job = jobs.get(job_id)
+        if job is not None:
+            active = list(job.get("active_urls", []))
+            if url not in active:
+                active.append(url)
+            job["active_urls"] = active
+            job["current_url"] = active[0] if active else url
+            job["current_index"] = index
+            job["updated_at"] = now_iso()
+
+    add_log(job_id, f"[{index}/{total}] Analisando {url}", "info")
+    try:
+        result = run_analysis(
+            url,
+            progress=lambda msg, lvl="info": add_log(job_id, f"[{index}/{total}] {msg}", lvl),
+            output_dir=OUTPUT_DIR,
+            save_history=False,
+        )
+        level = "success" if result.get("rankable", True) else "warning"
+        add_log(
+            job_id,
+            f"[{index}/{total}] Concluído: score {float(result.get('score_final', 0) or 0):.2f} · cobertura {float(result.get('coverage', 0) or 0):.1f}%",
+            level,
+        )
+        return {"index": index, "url": url, "status": "ok", "result": result}
+    except Exception as exc:
+        add_log(job_id, f"[{index}/{total}] Erro em {url}: {exc}", "error")
+        return {"index": index, "url": url, "status": "error", "error": str(exc)}
+    finally:
+        with jobs_lock:
+            job = jobs.get(job_id)
+            if job is not None:
+                active = [item for item in job.get("active_urls", []) if item != url]
+                job["active_urls"] = active
+                job["current_url"] = active[0] if active else None
+                job["updated_at"] = now_iso()
+
+
 def run_bulk_job(job_id: str, urls: List[str], settings: Dict[str, Any]) -> None:
     started_at = now_iso()
+    concurrency = max(1, min(int(settings.get("concurrency", 1)), 3))
     with jobs_lock:
         jobs[job_id]["status"] = "running"
         jobs[job_id]["started_at"] = started_at
         jobs[job_id]["updated_at"] = started_at
+        jobs[job_id]["active_urls"] = []
 
-    site_results: List[Dict[str, Any]] = []
     total = len(urls)
-    add_log(job_id, f"Modo bulk iniciado com {total} site(s).", "info")
-    add_log(job_id, f"Pausa aleatória responsável: {settings['min_delay']}s a {settings['max_delay']}s entre sites.", "warning")
+    completed_results: List[Dict[str, Any]] = []
+    add_log(job_id, f"Modo bulk iniciado com {total} site(s). Concorrência: {concurrency}.", "info")
+    add_log(job_id, f"Pausa aleatória responsável: {settings['min_delay']}s a {settings['max_delay']}s entre novos inícios.", "warning")
+    if concurrency == 1:
+        add_log(job_id, "Modo estável: um site por vez (recomendado para Railway/Lighthouse).", "success")
+    else:
+        add_log(job_id, "Lighthouse continua serializado internamente para proteger memória e Chromium.", "warning")
 
-    for index, url in enumerate(urls, start=1):
+    next_position = 0
+    stop_requested = False
+
+    def update_progress() -> None:
+        ordered = sorted(completed_results, key=lambda item: item.get("index", 0))
         with jobs_lock:
             job = jobs.get(job_id)
             if job is not None:
-                job["current_index"] = index
-                job["current_url"] = url
-                job["delay_remaining"] = 0
+                job["completed"] = len(ordered)
+                job["site_results"] = [
+                    summarize_site_result(item.get("result") or {}) if item.get("status") == "ok" else {
+                        "url": item.get("url"),
+                        "status": "error",
+                        "erro": item.get("error"),
+                        "score_final": 0,
+                        "coverage": 0,
+                    }
+                    for item in ordered
+                ]
                 job["updated_at"] = now_iso()
 
-        add_log(job_id, f"[{index}/{total}] Analisando {url}", "info")
-        try:
-            result = run_analysis(url, progress=lambda msg, lvl="info": add_log(job_id, msg, lvl), output_dir=OUTPUT_DIR, save_history=False)
-            site_results.append({"url": url, "status": "ok", "result": result})
-            add_log(job_id, f"[{index}/{total}] Concluído: score {float(result.get('score_final', 0) or 0):.2f}", "success")
-        except Exception as exc:
-            site_results.append({"url": url, "status": "error", "error": str(exc)})
-            add_log(job_id, f"[{index}/{total}] Erro em {url}: {exc}", "error")
-            if settings.get("stop_on_error"):
-                add_log(job_id, "Interrompido porque 'parar ao encontrar erro' está ativo.", "warning")
-                break
-        finally:
-            with jobs_lock:
-                job = jobs.get(job_id)
-                if job is not None:
-                    job["completed"] = len(site_results)
-                    job["site_results"] = [
-                        summarize_site_result(item.get("result") or {}) if item.get("status") == "ok" else {
-                            "url": item.get("url"),
-                            "status": "error",
-                            "erro": item.get("error"),
-                            "score_final": 0,
-                        }
-                        for item in site_results
-                    ]
-                    job["updated_at"] = now_iso()
+    with ThreadPoolExecutor(max_workers=concurrency, thread_name_prefix="colheiteira-bulk") as executor:
+        futures: Dict[Any, tuple[int, str]] = {}
 
-        if index < total and not (settings.get("stop_on_error") and site_results[-1].get("status") == "error"):
-            delay = random.uniform(float(settings["min_delay"]), float(settings["max_delay"]))
-            add_log(job_id, f"Pausa de {delay:.1f}s antes do próximo site.", "warning")
-            sleep_with_progress(job_id, delay)
+        def submit_next() -> bool:
+            nonlocal next_position
+            if next_position >= total or stop_requested:
+                return False
+            index = next_position + 1
+            url = urls[next_position]
+            next_position += 1
+            future = executor.submit(_run_bulk_site, job_id, index, total, url)
+            futures[future] = (index, url)
+            return True
 
+        for slot in range(min(concurrency, total)):
+            if slot > 0:
+                delay = random.uniform(float(settings["min_delay"]), float(settings["max_delay"]))
+                add_log(job_id, f"Pausa de {delay:.1f}s antes de iniciar outro trabalhador.", "warning")
+                sleep_with_progress(job_id, delay)
+            submit_next()
+
+        while futures:
+            future = next(as_completed(list(futures.keys())))
+            index, url = futures.pop(future, (0, ""))
+            if future.cancelled():
+                add_log(job_id, f"[{index}/{total}] Cancelado: {url}", "warning")
+                continue
+            try:
+                item = future.result()
+            except Exception as exc:
+                item = {"index": index, "url": url, "status": "error", "error": str(exc)}
+                add_log(job_id, f"[{index}/{total}] Erro fatal no trabalhador: {exc}", "error")
+            completed_results.append(item)
+            update_progress()
+
+            if item.get("status") == "error" and settings.get("stop_on_error"):
+                stop_requested = True
+                add_log(job_id, "Parada solicitada após erro fatal; tarefas ainda em execução serão finalizadas.", "warning")
+                for pending in list(futures):
+                    pending.cancel()
+
+            if not stop_requested and next_position < total:
+                delay = random.uniform(float(settings["min_delay"]), float(settings["max_delay"]))
+                add_log(job_id, f"Pausa de {delay:.1f}s antes do próximo site.", "warning")
+                sleep_with_progress(job_id, delay)
+                submit_next()
+
+    site_results = sorted(completed_results, key=lambda item: item.get("index", 0))
     final_result = aggregate_bulk_results(urls, site_results, settings, started_at)
     final_result = save_bulk_result(final_result)
     final_result = storage.save(final_result)
@@ -526,8 +633,14 @@ def run_bulk_job(job_id: str, urls: List[str], settings: Dict[str, Any]) -> None
         jobs[job_id]["ended_at"] = now_iso()
         jobs[job_id]["updated_at"] = now_iso()
         jobs[job_id]["current_url"] = None
+        jobs[job_id]["active_urls"] = []
         jobs[job_id]["delay_remaining"] = 0
-    add_log(job_id, f"Bulk concluído: {final_result['bulk']['ok']}/{final_result['bulk']['total']} site(s) OK. Média {final_result['score_final']:.2f}.", "success")
+    add_log(
+        job_id,
+        f"Bulk concluído: {final_result['bulk']['ok']}/{final_result['bulk']['total']} site(s) processados. "
+        f"Comparáveis: {final_result['bulk']['comparable']}. Média {final_result['score_final']:.2f}.",
+        "success",
+    )
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -610,6 +723,7 @@ def analyze():
             "completed": 0,
             "current_index": 0,
             "current_url": None,
+            "active_urls": [],
             "site_results": [],
         }
 
@@ -648,6 +762,7 @@ def bulk_analyze():
             "completed": 0,
             "current_index": 0,
             "current_url": None,
+            "active_urls": [],
             "delay_remaining": 0,
             "site_results": [],
         }

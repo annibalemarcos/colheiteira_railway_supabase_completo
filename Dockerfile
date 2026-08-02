@@ -5,14 +5,16 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONUNBUFFERED=1 \
     PATH="/opt/venv/bin:${PATH}" \
     CHROME_PATH=/usr/bin/chromium \
-    LIGHTHOUSE_BIN=lighthouse
+    LIGHTHOUSE_BIN=lighthouse \
+    LIGHTHOUSE_TIMEOUT=180 \
+    WEB_CONCURRENCY=1 \
+    GUNICORN_THREADS=8
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         python3 \
         python3-venv \
         python3-pip \
         chromium \
-        default-jre-headless \
         fonts-liberation \
         ca-certificates \
         curl \

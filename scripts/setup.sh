@@ -23,9 +23,7 @@ else
   echo "[AVISO] Node.js/npm não encontrados; o plugin Lighthouse ficará indisponível."
 fi
 
-if ! command -v java >/dev/null 2>&1; then
-  echo "[AVISO] Java não encontrado; o plugin de ortografia pode ficar indisponível."
-fi
+echo "[OK] Ortografia usa pyspellchecker em Python puro; Java não é necessário."
 
 mkdir -p output/history
 chmod +x run.sh run_dashboard.sh start.sh scripts/run.sh scripts/setup.sh

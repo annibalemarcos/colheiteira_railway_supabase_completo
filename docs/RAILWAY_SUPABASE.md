@@ -47,6 +47,7 @@ SECRET_KEY=COLOQUE_UMA_CHAVE_LONGA_E_ALEATORIA
 WEB_CONCURRENCY=1
 GUNICORN_THREADS=8
 GUNICORN_TIMEOUT=600
+LIGHTHOUSE_TIMEOUT=180
 DB_USE_NULL_POOL=false
 SESSION_COOKIE_SECURE=true
 ```
@@ -59,6 +60,7 @@ Variáveis opcionais:
 WEB_CONCURRENCY=1
 GUNICORN_THREADS=8
 GUNICORN_TIMEOUT=600
+LIGHTHOUSE_TIMEOUT=180
 DB_USE_NULL_POOL=false
 SESSION_COOKIE_SECURE=true
 ```
@@ -147,4 +149,17 @@ Sem `DATABASE_URL`, o backend será `files` e a porta padrão continuará sendo 
 - Não coloque a senha do Supabase no código ou no Git; use Variables do Railway.
 - Se a senha tiver caracteres reservados de URL, use a connection string fornecida pelo painel ou aplique URL encoding.
 - O disco do Railway não deve ser tratado como histórico permanente. Os JSONs continuam sendo gerados como compatibilidade, mas online o banco é a fonte de verdade.
-- O container inclui Chromium, Node.js, Lighthouse e Java para preservar os plugins atuais.
+- O container inclui Chromium, Node.js e Lighthouse. A ortografia usa pyspellchecker em Python puro, sem servidor Java.
+
+
+## 8. Concorrência recomendada
+
+A configuração fica em **Configurações → Modo bulk → Concorrência do lote**.
+
+- `1`: recomendado no Railway e em toda primeira validação;
+- `2`: pode acelerar plugins leves, mas usa mais memória;
+- `3`: use apenas em instâncias maiores.
+
+O Lighthouse sempre roda com exclusão mútua dentro do processo, mesmo quando a concorrência do lote é maior que 1. Isso evita duas instâncias pesadas do Chromium disputando memória.
+
+O JSON passa a informar `coverage`, `confidence`, `rankable` e `analysis_status`. Abaixo de 80% de cobertura, o ranking é marcado como inconclusivo.

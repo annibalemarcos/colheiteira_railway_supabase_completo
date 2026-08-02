@@ -1,248 +1,244 @@
-"""
-plugins/lighthouse/plugin.py
-Plugin atualizado com análise completa do Lighthouse.
-
-Correção Windows/npm global:
-- tenta lighthouse, lighthouse.cmd e lighthouse.exe;
-- adiciona automaticamente os caminhos comuns do npm global ao PATH;
-- usa LIGHTHOUSE_BIN, se definida;
-- cai para npx --yes lighthouse quando o binário global não aparece no PATH.
-"""
+"""Plugin Lighthouse estabilizado para execução local e Railway."""
 from __future__ import annotations
 
 import json
 import os
 import shutil
+import signal
 import subprocess
 import tempfile
+import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 
 class LighthousePlugin:
     def __init__(self):
         self.name = "lighthouse"
         self.description = "Análise de performance, acessibilidade e boas práticas"
-        self.weight = 1.5
+        self.weight = 2.4
+        self.config: Dict[str, Any] = {}
 
     def run(self, url: str) -> Dict[str, Any]:
-        output_file: Optional[str] = None
-        try:
-            env = self._build_env()
-            lighthouse_cmd = self._resolve_lighthouse_command(env)
+        env = self._build_env()
+        lighthouse_cmd = self._resolve_lighthouse_command(env)
+        if not lighthouse_cmd:
+            return self._error(
+                "Lighthouse não foi encontrado pelo Python.",
+                {"tentativas": self._candidate_commands(env, include_npx=True)},
+            )
 
-            if not lighthouse_cmd:
-                return {
-                    "status": "error",
-                    "score": 0,
-                    "peso": self.weight,
-                    "erro": (
-                        "Lighthouse não foi encontrado pelo Python. Ele pode estar instalado, "
-                        "mas fora do PATH desta janela. Rode `where lighthouse` e `npm prefix -g`. "
-                        "Se aparecer algo como `%APPDATA%\\npm`, reabra o terminal ou use o run_dashboard.bat atualizado."
-                    ),
-                    "detalhes": {
-                        "tentativas": self._candidate_commands(env, include_npx=True),
-                        "dica_windows": "No Windows o executável costuma ser lighthouse.cmd em C:\\Users\\SEU_USUARIO\\AppData\\Roaming\\npm."
-                    }
-                }
+        timeout = max(90, int(self.config.get("timeout_seconds", os.getenv("LIGHTHOUSE_TIMEOUT", "180"))))
+        attempts = max(1, min(int(self.config.get("retry_attempts", 2)), 3))
+        last_error = "Falha desconhecida do Lighthouse."
+        last_details: Dict[str, Any] = {}
 
-            with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as tmp:
-                output_file = tmp.name
+        for attempt in range(1, attempts + 1):
+            try:
+                data, command = self._execute(url, lighthouse_cmd, env, timeout)
+                result = self._parse_report(data, command)
+                result["detalhes"]["tentativa"] = attempt
+                result["detalhes"]["tentativas_maximas"] = attempts
+                return result
+            except TimeoutError as exc:
+                last_error = str(exc)
+                last_details = {"tentativa": attempt, "timeout_seconds": timeout}
+            except RuntimeError as exc:
+                last_error = str(exc)
+                last_details = {"tentativa": attempt}
+            except Exception as exc:
+                last_error = str(exc)
+                last_details = {"tentativa": attempt}
+
+            if attempt < attempts:
+                time.sleep(2.0)
+
+        return self._error(last_error, last_details)
+
+    def _execute(
+        self,
+        url: str,
+        lighthouse_cmd: List[str],
+        env: Dict[str, str],
+        timeout: int,
+    ) -> Tuple[Dict[str, Any], str]:
+        with tempfile.TemporaryDirectory(prefix="colheiteira_lighthouse_") as temp_dir:
+            output_file = Path(temp_dir) / "report.json"
+            profile_dir = Path(temp_dir) / "chrome-profile"
+            categories = self.config.get("categories") or ["performance", "accessibility", "best-practices", "seo"]
+            category_arg = ",".join(str(item) for item in categories)
+            chrome_flags = " ".join([
+                "--headless=new",
+                "--no-sandbox",
+                "--disable-dev-shm-usage",
+                "--disable-gpu",
+                "--disable-extensions",
+                "--disable-background-networking",
+                "--disable-renderer-backgrounding",
+                "--disable-background-timer-throttling",
+                f"--user-data-dir={profile_dir}",
+            ])
 
             cmd = lighthouse_cmd + [
                 url,
                 "--output=json",
                 f"--output-path={output_file}",
-                "--chrome-flags=--headless --no-sandbox",
+                f"--only-categories={category_arg}",
+                "--max-wait-for-load=90000",
+                f"--chrome-flags={chrome_flags}",
                 "--quiet",
             ]
+            if str(self.config.get("device", "mobile")).lower() == "desktop":
+                cmd.append("--preset=desktop")
 
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=120,
-                env=env,
-            )
+            returncode, stdout, stderr = self._run_process(cmd, env=env, timeout=timeout)
+            if returncode != 0:
+                message = (stderr or stdout or "").strip()
+                raise RuntimeError(f"Lighthouse falhou ao executar. {message[:1400]}")
+            if not output_file.exists() or output_file.stat().st_size == 0:
+                raise RuntimeError("Lighthouse executou, mas não gerou o JSON de saída.")
 
-            if result.returncode != 0:
-                stderr = (result.stderr or result.stdout or "").strip()
-                return {
-                    "status": "error",
-                    "score": 0,
-                    "peso": self.weight,
-                    "erro": f"Lighthouse falhou ao executar. {stderr[:1200]}",
-                    "detalhes": {
-                        "comando": " ".join(cmd[:2]),
-                        "returncode": result.returncode,
-                    },
-                }
+            try:
+                data = json.loads(output_file.read_text(encoding="utf-8"))
+            except json.JSONDecodeError as exc:
+                raise RuntimeError(f"JSON inválido gerado pelo Lighthouse: {exc}") from exc
+            return data, " ".join(cmd[:2])
 
-            if not output_file or not os.path.exists(output_file) or os.path.getsize(output_file) == 0:
-                return {
-                    "status": "error",
-                    "score": 0,
-                    "peso": self.weight,
-                    "erro": "Lighthouse executou, mas não gerou o JSON de saída.",
-                    "detalhes": {"comando": " ".join(cmd[:2])},
-                }
+    def _run_process(self, cmd: List[str], *, env: Dict[str, str], timeout: int) -> Tuple[int, str, str]:
+        kwargs: Dict[str, Any] = {
+            "stdout": subprocess.PIPE,
+            "stderr": subprocess.PIPE,
+            "text": True,
+            "env": env,
+        }
+        if os.name == "nt":
+            kwargs["creationflags"] = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+        else:
+            kwargs["start_new_session"] = True
 
-            with open(output_file, "r", encoding="utf-8") as f:
-                lighthouse_data = json.load(f)
+        process = subprocess.Popen(cmd, **kwargs)
+        try:
+            stdout, stderr = process.communicate(timeout=timeout)
+            return process.returncode, stdout, stderr
+        except subprocess.TimeoutExpired as exc:
+            self._terminate_process_tree(process)
+            stdout, stderr = process.communicate()
+            raise TimeoutError(f"Timeout ao executar Lighthouse (>{timeout}s)") from exc
 
-            categories = lighthouse_data.get("categories", {})
+    @staticmethod
+    def _terminate_process_tree(process: subprocess.Popen) -> None:
+        try:
+            if os.name == "nt":
+                process.kill()
+            else:
+                os.killpg(os.getpgid(process.pid), signal.SIGKILL)
+        except Exception:
+            try:
+                process.kill()
+            except Exception:
+                pass
 
-            # O Lighthouse 13 pode retornar score=None em algumas categorias/audits.
-            # Antes isso quebrava com: "'<' not supported between instances of 'NoneType' and 'float'".
-            performance = self._category_score(categories, "performance")
-            accessibility = self._category_score(categories, "accessibility")
-            best_practices = self._category_score(categories, "best-practices")
-            seo_score = self._category_score(categories, "seo")
+    def _parse_report(self, data: Dict[str, Any], command: str) -> Dict[str, Any]:
+        categories = data.get("categories") or {}
+        scores = {
+            "performance": self._category_score(categories, "performance"),
+            "accessibility": self._category_score(categories, "accessibility"),
+            "best_practices": self._category_score(categories, "best-practices"),
+            "seo": self._category_score(categories, "seo"),
+        }
+        valid = {key: value for key, value in scores.items() if value is not None}
+        if not valid:
+            raise RuntimeError("O Lighthouse não retornou scores válidos.")
 
-            valid_category_scores = [
-                score for score in (performance, accessibility, best_practices, seo_score)
-                if score is not None
-            ]
-            score_final = (sum(valid_category_scores) / len(valid_category_scores)) if valid_category_scores else 0
+        weights = {"performance": 0.35, "accessibility": 0.25, "best_practices": 0.20, "seo": 0.20}
+        denominator = sum(weights[key] for key in valid)
+        final_score = sum(valid[key] * weights[key] for key in valid) / denominator
 
-            audits = lighthouse_data.get("audits", {})
-            metricas_performance = {
-                "first_contentful_paint": self._get_metric(audits, "first-contentful-paint"),
-                "speed_index": self._get_metric(audits, "speed-index"),
-                "largest_contentful_paint": self._get_metric(audits, "largest-contentful-paint"),
-                "time_to_interactive": self._get_metric(audits, "interactive"),
-                "total_blocking_time": self._get_metric(audits, "total-blocking-time"),
-                "cumulative_layout_shift": self._get_metric(audits, "cumulative-layout-shift"),
-            }
+        audits = data.get("audits") or {}
+        metrics = {
+            "first_contentful_paint": self._metric(audits, "first-contentful-paint"),
+            "speed_index": self._metric(audits, "speed-index"),
+            "largest_contentful_paint": self._metric(audits, "largest-contentful-paint"),
+            "time_to_interactive": self._metric(audits, "interactive"),
+            "total_blocking_time": self._metric(audits, "total-blocking-time"),
+            "cumulative_layout_shift": self._metric(audits, "cumulative-layout-shift"),
+        }
 
-            problemas = []
-            if performance < 50:
-                problemas.append({
-                    "categoria": "Performance",
-                    "severidade": "critical",
-                    "problema": f"Score muito baixo: {performance:.0f}/100",
-                    "sugestao": "Otimize imagens, minimize CSS/JS, use CDN",
+        problems = []
+        thresholds = {
+            "performance": (50, "Performance", "critical", "Otimize imagens, JavaScript, CSS e cache."),
+            "accessibility": (80, "Acessibilidade", "warning", "Revise contraste, rótulos, foco e textos alternativos."),
+            "best_practices": (80, "Boas práticas", "warning", "Revise HTTPS, erros do navegador e bibliotecas."),
+            "seo": (80, "SEO Lighthouse", "warning", "Revise indexação e elementos básicos de descoberta."),
+        }
+        for key, (threshold, label, severity, suggestion) in thresholds.items():
+            value = valid.get(key)
+            if value is not None and value < threshold:
+                problems.append({
+                    "categoria": label,
+                    "severidade": severity,
+                    "problema": f"Score abaixo do ideal: {value:.0f}/100",
+                    "sugestao": suggestion,
                 })
 
-            if accessibility < 80:
-                problemas.append({
-                    "categoria": "Acessibilidade",
-                    "severidade": "warning",
-                    "problema": f"Score abaixo do ideal: {accessibility:.0f}/100",
-                    "sugestao": "Adicione alt text, melhore contraste, use ARIA labels",
+        opportunities = []
+        for audit_id, audit in audits.items():
+            details = audit.get("details") or {}
+            audit_score = self._safe_float(audit.get("score"), 1.0)
+            savings = self._safe_float(details.get("overallSavingsMs"), 0.0)
+            if audit_score < 0.9 and savings > 500:
+                opportunities.append({
+                    "titulo": audit.get("title", audit_id),
+                    "descricao": audit.get("description", ""),
+                    "economia_ms": round(savings, 2),
                 })
+        opportunities.sort(key=lambda item: item["economia_ms"], reverse=True)
 
-            if best_practices < 80:
-                problemas.append({
-                    "categoria": "Boas Práticas",
-                    "severidade": "warning",
-                    "problema": f"Score abaixo do ideal: {best_practices:.0f}/100",
-                    "sugestao": "Use HTTPS, evite bibliotecas vulneráveis, otimize recursos",
-                })
-
-            oportunidades = []
-            for audit_id, audit in audits.items():
-                audit_score = self._safe_float(audit.get("score"), default=1.0)
-                details = audit.get("details") or {}
-                if details and audit_score < 0.9:
-                    savings = self._safe_float(details.get("overallSavingsMs"), default=0.0)
-                    if savings > 500:
-                        oportunidades.append({
-                            "titulo": audit.get("title", audit_id),
-                            "descricao": audit.get("description", ""),
-                            "economia_ms": round(savings, 2),
-                        })
-
-            oportunidades.sort(key=lambda x: x["economia_ms"], reverse=True)
-            concorrentes = self._get_competitors_examples()
-
-            return {
-                "status": "ok",
-                "score": round(score_final, 2),
-                "peso": self.weight,
-                "erro": None,
-                "detalhes": {
-                    "scores": {
-                        "performance": round(performance, 2),
-                        "accessibility": round(accessibility, 2),
-                        "best_practices": round(best_practices, 2),
-                        "seo": round(seo_score, 2),
-                    },
-                    "metricas_performance": metricas_performance,
-                    "problemas": problemas,
-                    "oportunidades": oportunidades[:5],
-                    "concorrentes": concorrentes,
-                    "lighthouse_bin": " ".join(lighthouse_cmd),
-                },
-            }
-
-        except subprocess.TimeoutExpired:
-            return {
-                "status": "error",
-                "score": 0,
-                "peso": self.weight,
-                "erro": "Timeout ao executar Lighthouse (>120s)",
-                "detalhes": {},
-            }
-        except Exception as e:
-            return {
-                "status": "error",
-                "score": 0,
-                "peso": self.weight,
-                "erro": str(e),
-                "detalhes": {},
-            }
-        finally:
-            if output_file and os.path.exists(output_file):
-                try:
-                    os.unlink(output_file)
-                except OSError:
-                    pass
+        return {
+            "status": "ok",
+            "score": round(final_score, 2),
+            "peso": self.weight,
+            "erro": None,
+            "detalhes": {
+                "scores": {key: round(value, 2) if value is not None else None for key, value in scores.items()},
+                "metricas_performance": metrics,
+                "problemas": problems,
+                "oportunidades": opportunities[:5],
+                "lighthouse_bin": command,
+                "versao_lighthouse": data.get("lighthouseVersion"),
+                "url_final": data.get("finalDisplayedUrl") or data.get("finalUrl"),
+            },
+        }
 
     def _build_env(self) -> Dict[str, str]:
-        """Monta um PATH mais esperto para achar binários globais do npm no Windows."""
         env = os.environ.copy()
         path_parts = []
-
         for var in ("APPDATA", "LOCALAPPDATA"):
             value = env.get(var)
             if value:
                 path_parts.append(str(Path(value) / "npm"))
-
         program_files = env.get("ProgramFiles")
         if program_files:
             path_parts.append(str(Path(program_files) / "nodejs"))
-
         npm_prefix = self._npm_prefix(env)
         if npm_prefix:
             path_parts.append(npm_prefix)
 
-        existing_path = env.get("PATH", "")
-        unique_parts = []
+        existing = env.get("PATH", "")
+        unique = []
         seen = set()
-        for part in path_parts + existing_path.split(os.pathsep):
-            if not part:
-                continue
-            normalized = part.lower()
-            if normalized not in seen:
-                unique_parts.append(part)
-                seen.add(normalized)
-
-        env["PATH"] = os.pathsep.join(unique_parts)
+        for part in path_parts + existing.split(os.pathsep):
+            if part and part.lower() not in seen:
+                unique.append(part)
+                seen.add(part.lower())
+        env["PATH"] = os.pathsep.join(unique)
         return env
 
     def _npm_prefix(self, env: Dict[str, str]) -> Optional[str]:
         for npm_cmd in ("npm", "npm.cmd"):
-            npm_path = shutil.which(npm_cmd, path=env.get("PATH")) or npm_cmd
+            resolved = shutil.which(npm_cmd, path=env.get("PATH")) or npm_cmd
             try:
-                result = subprocess.run(
-                    [npm_path, "prefix", "-g"],
-                    capture_output=True,
-                    text=True,
-                    timeout=15,
-                    env=env,
-                )
+                result = subprocess.run([resolved, "prefix", "-g"], capture_output=True, text=True, timeout=12, env=env)
                 if result.returncode == 0 and result.stdout.strip():
                     return result.stdout.strip()
             except Exception:
@@ -251,24 +247,18 @@ class LighthousePlugin:
 
     def _candidate_commands(self, env: Dict[str, str], include_npx: bool = False) -> List[List[str]]:
         candidates: List[List[str]] = []
-
-        configured_bin = env.get("LIGHTHOUSE_BIN")
-        if configured_bin:
-            candidates.append([configured_bin])
-
+        configured = env.get("LIGHTHOUSE_BIN")
+        if configured:
+            candidates.append([configured])
         for name in ("lighthouse", "lighthouse.cmd", "lighthouse.exe"):
             resolved = shutil.which(name, path=env.get("PATH"))
             if resolved:
                 candidates.append([resolved])
             candidates.append([name])
-
         npm_prefix = self._npm_prefix(env)
         if npm_prefix:
-            for name in ("lighthouse.cmd", "lighthouse.exe", "lighthouse"):
-                direct = str(Path(npm_prefix) / name)
-                if direct not in [cmd[0] for cmd in candidates]:
-                    candidates.append([direct])
-
+            for name in ("lighthouse", "lighthouse.cmd", "lighthouse.exe"):
+                candidates.append([str(Path(npm_prefix) / name)])
         if include_npx:
             for name in ("npx", "npx.cmd"):
                 resolved = shutil.which(name, path=env.get("PATH"))
@@ -276,100 +266,53 @@ class LighthousePlugin:
                     candidates.append([resolved, "--yes", "lighthouse"])
                 candidates.append([name, "--yes", "lighthouse"])
 
-        deduped: List[List[str]] = []
+        deduped = []
         seen = set()
-        for candidate in candidates:
-            key = tuple(candidate)
+        for item in candidates:
+            key = tuple(item)
             if key not in seen:
-                deduped.append(candidate)
+                deduped.append(item)
                 seen.add(key)
         return deduped
 
     def _resolve_lighthouse_command(self, env: Dict[str, str]) -> Optional[List[str]]:
-        """Encontra um comando funcional do Lighthouse sem travar o app.
-
-        Primeiro testa os binários diretos (`lighthouse`, `lighthouse.cmd`, etc.).
-        Só depois tenta `npx`, porque `npx --yes` pode tentar baixar pacote e
-        demorar quando a rede/npm está fazendo cosplay de tartaruga.
-        """
-        direct_candidates = self._candidate_commands(env, include_npx=False)
-        npx_candidates = [
-            c for c in self._candidate_commands(env, include_npx=True)
-            if c not in direct_candidates
-        ]
-
-        for candidate in direct_candidates:
+        direct = self._candidate_commands(env, include_npx=False)
+        all_candidates = self._candidate_commands(env, include_npx=True)
+        for candidate in direct + [item for item in all_candidates if item not in direct]:
             try:
-                result = subprocess.run(
-                    candidate + ["--version"],
-                    capture_output=True,
-                    text=True,
-                    timeout=8,
-                    env=env,
-                )
+                result = subprocess.run(candidate + ["--version"], capture_output=True, text=True, timeout=15, env=env)
                 if result.returncode == 0:
                     return candidate
             except Exception:
                 continue
-
-        for candidate in npx_candidates:
-            try:
-                result = subprocess.run(
-                    candidate + ["--version"],
-                    capture_output=True,
-                    text=True,
-                    timeout=15,
-                    env=env,
-                )
-                if result.returncode == 0:
-                    return candidate
-            except Exception:
-                continue
-
         return None
 
-
-    def _safe_float(self, value: Any, default: float = 0.0) -> float:
-        """Converte números do Lighthouse com proteção contra None/string."""
-        if value is None:
-            return default
+    @staticmethod
+    def _safe_float(value: Any, default: float = 0.0) -> float:
         try:
-            return float(value)
+            return default if value is None else float(value)
         except (TypeError, ValueError):
             return default
 
-    def _category_score(self, categories: Dict[str, Any], category_id: str) -> float:
-        """Retorna score da categoria em escala 0-100, aceitando score None."""
-        category = categories.get(category_id) or {}
-        return self._safe_float(category.get("score"), default=0.0) * 100
+    def _category_score(self, categories: Dict[str, Any], category_id: str) -> Optional[float]:
+        category = categories.get(category_id)
+        if not category or category.get("score") is None:
+            return None
+        return self._safe_float(category.get("score")) * 100
 
-    def _get_metric(self, audits: dict, metric_id: str) -> dict:
-        """Extrai uma métrica específica dos audits."""
-        audit = audits.get(metric_id, {})
+    def _metric(self, audits: Dict[str, Any], metric_id: str) -> Dict[str, Any]:
+        audit = audits.get(metric_id) or {}
         return {
-            "value": audit.get("numericValue", 0),
+            "value": audit.get("numericValue"),
             "display": audit.get("displayValue", "N/A"),
-            "score": audit.get("score", 0),
+            "score": audit.get("score"),
         }
 
-    def _get_competitors_examples(self):
-        return [
-            {
-                "nome": "Google",
-                "url": "https://google.com",
-                "performance": 99,
-                "motivo": "Infraestrutura global, otimização extrema, recursos mínimos",
-            },
-            {
-                "nome": "Vercel",
-                "url": "https://vercel.com",
-                "performance": 98,
-                "motivo": "CDN edge, code splitting, pre-rendering, image optimization",
-            },
-            {
-                "nome": "Cloudflare",
-                "url": "https://cloudflare.com",
-                "performance": 97,
-                "motivo": "Edge computing, automatic optimization, smart caching",
-            },
-        ]
+    def _error(self, message: str, details: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        return {
+            "status": "error",
+            "score": 0,
+            "peso": self.weight,
+            "erro": message,
+            "detalhes": details or {},
+        }

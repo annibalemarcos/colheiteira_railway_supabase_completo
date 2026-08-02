@@ -6,7 +6,7 @@ beautifulsoup4>=4.12.0,<5
 lxml>=4.9.0,<7
 
 # Análise ortográfica
-language-tool-python>=2.7.1,<3
+pyspellchecker>=0.8.2,<1
 
 # Processamento de imagens
 Pillow>=10.0.0,<13

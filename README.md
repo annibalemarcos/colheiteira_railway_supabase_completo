@@ -6,18 +6,19 @@ Sistema avançado de análise de qualidade de websites com múltiplos critérios
 
 ### ✅ Análises Implementadas
 
-1. **Ortografia** - Detecta erros de português e problemas gramaticais
+1. **Ortografia** - Detecta possíveis erros de português com dicionário local em Python
 2. **Links** - Identifica links quebrados (404) e lentos
 3. **Imagens** - Analisa qualidade, tamanho, otimização e alt text
-4. **Redes Sociais** - Avalia presença e qualidade dos perfis sociais
+4. **Redes Sociais** - Avalia metadados sociais e links oficiais presentes na página
 5. **Lighthouse** - Performance, acessibilidade e boas práticas
 6. **SEO** - Otimização para motores de busca
 
 ### 🎯 Diferenciais
 
 - ✨ Dashboard interativo com gráficos em Bootstrap 5
-- 🧺 Modo bulk com toggle para analisar vários sites em sequência
-- ⏱️ Pausas aleatórias configuráveis entre sites para reduzir rajadas de requisições
+- 🧺 Modo bulk com concorrência configurável de 1 a 3 sites
+- ⏱️ Pausas aleatórias configuráveis entre novos inícios para reduzir rajadas de requisições
+- 🧭 Cobertura e confiança para impedir ranking enganoso quando algum plugin falha
 - ⚙️ Menu lateral e painel de configurações no próprio dashboard
 - 📊 Comparação automática com 3 concorrentes de referência
 - 🎨 Visualização clara dos problemas e soluções
@@ -51,14 +52,6 @@ source venv/bin/activate
 
 # Instalar dependências
 pip install -r requirements.txt
-```
-
-### Instalar LanguageTool (Ortografia)
-
-```bash
-# O LanguageTool será baixado automaticamente na primeira execução
-# Requer Java instalado
-java -version
 ```
 
 ## 🚀 Uso
@@ -110,7 +103,7 @@ Rotas úteis:
 - `GET /logout` — encerra a sessão
 - `GET /` — dashboard visual
 - `POST /api/analyze` — inicia uma análise enviando `{ "url": "https://site.com" }`
-- `POST /api/bulk_analyze` — inicia análise em lote enviando `{ "urls": ["https://a.com", "https://b.com"], "settings": {"min_delay": 8, "max_delay": 25, "max_urls": 30} }`
+- `POST /api/bulk_analyze` — inicia análise em lote enviando `{ "urls": ["https://a.com", "https://b.com"], "settings": {"min_delay": 8, "max_delay": 25, "max_urls": 30, "concurrency": 1} }`
 - `GET /api/jobs/<job_id>` — status/logs de uma análise
 - `GET /api/data` — última análise salva
 - `GET /api/history` — histórico de análises
@@ -133,12 +126,13 @@ A sessão dura 12 horas, utiliza cookie `HttpOnly` e `SameSite=Lax`. No Railway,
 
 No dashboard, ative o toggle **Modo bulk** para trocar o campo de URL única por uma caixa de texto que aceita vários sites. Os sites podem ser separados por linha, vírgula, ponto e vírgula ou tabulação.
 
-O lote é executado em sequência, com pausa aleatória entre um site e outro. Essa pausa é configurável em **Configurações → Modo bulk** e serve para evitar rajadas de requisições e deixar a análise mais gentil com os servidores analisados.
+O lote usa concorrência configurável de 1 a 3. Com concorrência 1, roda um site por vez; com 2 ou 3, novos trabalhos são iniciados com pausas aleatórias. O Lighthouse permanece serializado para proteger memória e Chromium. Essa pausa é configurável em **Configurações → Modo bulk** e serve para evitar rajadas de requisições e deixar a análise mais gentil com os servidores analisados.
 
 Configurações disponíveis:
 
 - pausa mínima em segundos;
 - pausa máxima em segundos;
+- concorrência de 1 a 3, com padrão 1;
 - máximo de sites por lote;
 - opção de parar o lote no primeiro erro fatal.
 
@@ -198,7 +192,11 @@ class MeuPlugin:
     "imagens": {...}
   },
   "score_final": 82.45,
-  "ranking": "A (Muito bom)",
+  "ranking": "B (Muito bom)",
+  "coverage": 100.0,
+  "confidence": "alta",
+  "rankable": true,
+  "analysis_status": "complete",
   "fim": "2025-12-25T02:52:15.123456"
 }
 ```
@@ -278,8 +276,12 @@ python main.py https://site3.com
 Calculado por média ponderada:
 
 ```
-score_final = Σ(score_plugin × peso_plugin) / Σ(pesos)
+score_final = Σ(score_plugin concluído × peso_plugin) / Σ(pesos concluídos)
+
+coverage = Σ(pesos concluídos) / Σ(pesos esperados) × 100
 ```
+
+Abaixo de 80% de cobertura, o score é provisório e o ranking aparece como **Inconclusivo**.
 
 ### Rankings
 - **A (90-100)**: Excelente
@@ -300,14 +302,9 @@ pip install requests
 npm install -g lighthouse
 ```
 
-### Erro: LanguageTool
-Requer Java instalado:
+### Erro: pyspellchecker não instalado
 ```bash
-# Ubuntu/Debian
-sudo apt install default-jre
-
-# Windows
-# Baixe do site oficial do Java
+pip install -r requirements.txt
 ```
 
 ## 🤝 Contribuindo
@@ -339,7 +336,7 @@ Ferramentas utilizadas:
 - Chart.js
 - Flask
 - BeautifulSoup
-- LanguageTool
+- pyspellchecker
 - Lighthouse
 - Pillow
 
@@ -400,7 +397,7 @@ O dashboard também possui os botões **Limpar resultado** e **Diagnosticar Ligh
 Esta versão corrige dois erros vistos no dashboard:
 
 - Lighthouse: proteção para `score=None` retornado pelo Lighthouse 13 em alguns audits/categorias. Antes podia aparecer: `'<'' not supported between instances of 'NoneType' and 'float'`.
-- Ortografia: compatibilidade com versões novas do `language-tool-python`, que podem usar `matched_text`/`rule_id` em vez de `matchedText`/`ruleId`.
+- Ortografia: substituição do servidor Java por `pyspellchecker`, evitando conflito de portas e consumo extra no Railway.
 
 Depois de atualizar, limpe o resultado antigo pelo botão **Limpar resultado** ou rode `clear_output.bat`, então execute uma nova análise.
 
@@ -412,7 +409,7 @@ Esta versão pode rodar com o mesmo código em dois modos:
 - **online:** PostgreSQL do Supabase quando `DATABASE_URL` estiver configurada.
 
 Arquivos de deploy incluídos: `Dockerfile`, `railway.json`, `start.sh` e `Procfile`.
-O container instala Chromium, Lighthouse, Node.js e Java para manter os plugins existentes.
+O container instala Chromium, Lighthouse e Node.js. A ortografia roda em Python puro, sem Java.
 
 Guia completo: [`docs/RAILWAY_SUPABASE.md`](docs/RAILWAY_SUPABASE.md)
 

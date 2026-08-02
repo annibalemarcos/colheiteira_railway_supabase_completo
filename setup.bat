@@ -30,15 +30,9 @@ if errorlevel 1 (
 )
 echo.
 
-REM Verifica Java
-echo [3/5] Verificando Java...
-java -version >nul 2>&1
-if errorlevel 1 (
-    echo [AVISO] Java nao encontrado
-    echo Plugin de ortografia nao funcionara. Instale de: https://www.java.com/
-) else (
-    echo [OK] Java encontrado
-)
+REM Ortografia não depende mais de Java
+echo [3/5] Verificando motor de ortografia...
+echo [OK] Ortografia usa pyspellchecker em Python puro
 echo.
 
 REM Cria ambiente virtual

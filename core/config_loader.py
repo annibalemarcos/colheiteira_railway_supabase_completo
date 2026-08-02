@@ -31,35 +31,36 @@ class ConfigLoader:
                 "enabled": True,
                 "language": "pt-BR",
                 "max_errors": 50,
-                "weight": 1.5
+                "weight": 0.7
             },
             "links": {
                 "enabled": True,
                 "max_links_check": 100,
                 "timeout": 5,
-                "weight": 1.8
+                "weight": 1.3
             },
             "imagens": {
                 "enabled": True,
                 "max_images_check": 50,
-                "weight": 1.6
+                "weight": 1.2
             },
             "social_media": {
                 "enabled": True,
-                "weight": 1.4
+                "weight": 0.3
             },
             "lighthouse": {
                 "enabled": True,
-                "weight": 1.5
+                "weight": 2.4
             },
             "seo": {
                 "enabled": True,
-                "weight": 1.0
+                "weight": 1.5
             },
             "global": {
                 "timeout": 30,
-                "max_concurrent": 10,
-                "retry_attempts": 3
+                "max_concurrent": 3,
+                "retry_attempts": 2,
+                "minimum_coverage_for_ranking": 80
             }
         }
     

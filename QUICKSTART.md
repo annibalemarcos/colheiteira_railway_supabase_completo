@@ -108,7 +108,7 @@
     "imagens": {
       "status": "ok",
       "score": 62.3,
-      "peso": 1.6,
+      "peso": 1.2,
       "erro": null,
       "detalhes": {
         "total_imagens": 45,
@@ -170,7 +170,7 @@
     "social_media": {
       "status": "ok",
       "score": 85.0,
-      "peso": 1.4,
+      "peso": 0.3,
       "erro": null,
       "detalhes": {
         "redes_encontradas": 4,
@@ -449,7 +449,7 @@ Também existe o botão **Diagnosticar Lighthouse**, que testa o Lighthouse pelo
 Esta versão corrige dois erros vistos no dashboard:
 
 - Lighthouse: proteção para `score=None` retornado pelo Lighthouse 13 em alguns audits/categorias. Antes podia aparecer: `'<'' not supported between instances of 'NoneType' and 'float'`.
-- Ortografia: compatibilidade com versões novas do `language-tool-python`, que podem usar `matched_text`/`rule_id` em vez de `matchedText`/`ruleId`.
+- Ortografia: substituição do servidor local `language-tool-python` por `pyspellchecker` em Python puro, sem portas Java concorrentes no Railway.
 
 Depois de atualizar, limpe o resultado antigo pelo botão **Limpar resultado** ou rode `clear_output.bat`, então execute uma nova análise.
 
@@ -458,7 +458,7 @@ Depois de atualizar, limpe o resultado antigo pelo botão **Limpar resultado** o
 1. Abra `http://localhost:5840`.
 2. Ative o toggle **Modo bulk**.
 3. Cole vários sites, um por linha, vírgula ou ponto e vírgula.
-4. Ajuste as pausas em **Configurações**. O padrão é de 8 a 25 segundos entre sites.
+4. Ajuste as pausas e a **Concorrência do lote** em **Configurações**. O padrão é concorrência 1 e pausas de 8 a 25 segundos entre novos inícios.
 5. Clique em **Analisar lote** e acompanhe progresso, logs e resultados individuais.
 
 Exemplo:
