@@ -38,12 +38,17 @@ railway up
 Cadastre no serviço:
 
 ```env
-DATABASE_URL=postgresql://postgres.PROJECT_REF:SENHA@REGIAO.pooler.supabase.com:5432/postgres
+DATABASE_URL=postgresql://postgres.bdmrgvbohxdpjggjtkmt:psoV16xx6TztZ3cw@aws-0-us-east-2.pooler.supabase.com:5432/postgres
 STORAGE_BACKEND=database
 STORAGE_STRICT=true
 ADMIN_USERNAME=admin
 ADMIN_PASSWORD=000000
 SECRET_KEY=COLOQUE_UMA_CHAVE_LONGA_E_ALEATORIA
+WEB_CONCURRENCY=1
+GUNICORN_THREADS=8
+GUNICORN_TIMEOUT=600
+DB_USE_NULL_POOL=false
+SESSION_COOKIE_SECURE=true
 ```
 
 O Railway fornece `PORT` automaticamente. Não fixe a porta no painel.
